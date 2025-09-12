@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         String      @id @default(auto()) @map("_id") @db.ObjectId
+  username   String      @unique
+  email      String      @unique
+  password   String
+  role       Role
+  createdAt  DateTime    @default(now())
+  characters Character[]
+}
+
+enum Role {
+  MESTRE
+  JOGADOR
+}
+
+model Character {
+  id        String @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  life      Int
+  xp        Int
+  agility   Int
+  strength  Int
+  vigor     Int
+  presence  Int
+  intellect Int
+
+  // Relação passiva opcional (one-to-many)
+  passiveSkillId String? @db.ObjectId
+  passiveSkill   Skill?  @relation("PassiveSkillRelation", fields: [passiveSkillId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  // Relação ativa (várias skills ativas)
+  skills Skill[] @relation("ActiveSkillsRelation")
+
+  inventory Inventory[]
+  ownerId   String      @db.ObjectId
+  owner     User        @relation(fields: [ownerId], references: [id])
+}
+
+model Skill {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  description String
+  damage      Int
+  type        SkillType
+
+  // Relação passiva (vários personagens podem usar a mesma skill ou não ter nenhuma)
+  passiveFor Character[] @relation("PassiveSkillRelation")
+
+  // Relação ativa
+  character   Character? @relation("ActiveSkillsRelation", fields: [characterId], references: [id])
+  characterId String?    @db.ObjectId
+}
+
+enum SkillType {
+  PASSIVE
+  ACTIVE
+}
+
+model Inventory {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  quantity    Int
+  characterId String    @db.ObjectId
+  character   Character @relation(fields: [characterId], references: [id])
+}
