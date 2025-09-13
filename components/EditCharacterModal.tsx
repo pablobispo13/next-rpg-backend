@@ -1,7 +1,7 @@
 "use client";
 
-import { Dialog, DialogTitle, DialogContent, DialogActions, TextField, Button } from "@mui/material";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Box, Modal, TextField, Button } from "@mui/material";
 import axios from "axios";
 
 type Character = {
@@ -15,61 +15,124 @@ type Character = {
   presence: number;
   intellect: number;
   ownerId: string;
-  owner?: { username: string };
 };
-interface Props {
+
+type Props = {
   character: Character;
   onClose: () => void;
-  onSave: () => void;
-}
+  onSave: (updated: Character) => void;
+  canSave: boolean; // controla se é apenas visualização
+};
 
-export default function EditCharacterModal({ character, onClose, onSave }: Props) {
-  const [formData, setFormData] = useState({
-    name: character.name,
-    life: character.life,
-    xp: character.xp,
-    agility: character.agility,
-    strength: character.strength,
-    vigor: character.vigor,
-    presence: character.presence,
-    intellect: character.intellect,
-  });
+export default function EditCharacterModal({ character, onClose, onSave, canSave }: Props) {
+  const [form, setForm] = useState<Character>({ ...character });
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : "";
+  useEffect(() => {
+    setForm({ ...character });
+  }, [character]);
 
-  const handleSave = async () => {
-    await axios.put(`/api/characters/${character.id}`, formData, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    onClose();
-    onSave();
+  const handleChange = (field: keyof Character, value: any) => {// eslint-disable-line @typescript-eslint/no-explicit-any 
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSubmit = async () => {
+    if (!token) return;
+    try {
+      const res = await axios.put(`/api/characters/${form.id}`, form, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      onSave(res.data); // envia para o parent atualizar estado
+      onClose();
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   return (
-    <Dialog open onClose={onClose}>
-      <DialogTitle>Editar Personagem</DialogTitle>
-      <DialogContent>
-        {Object.keys(formData).map((key) => (
-          <TextField
-            key={key}
-            label={key.charAt(0).toUpperCase() + key.slice(1)}
-            fullWidth
-            margin="dense"
-            type={typeof formData[key as keyof typeof formData] === "number" ? "number" : "text"}
-            value={formData[key as keyof typeof formData]}
-            onChange={(e) => {
-              const value = typeof formData[key as keyof typeof formData] === "number"
-                ? Number(e.target.value)
-                : e.target.value;
-              setFormData({ ...formData, [key]: value });
-            }}
-          />
-        ))}
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancelar</Button>
-        <Button variant="contained" onClick={handleSave}>Salvar</Button>
-      </DialogActions>
-    </Dialog>
+    <Modal open={true} onClose={onClose}>
+      <Box
+        sx={{
+          position: "absolute",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          width: 400,
+          bgcolor: "background.paper",
+          boxShadow: 24,
+          p: 4,
+          display: "flex",
+          flexDirection: "column",
+          gap: 2,
+        }}
+      >
+        <TextField
+          label="Nome"
+          value={form.name}
+          onChange={(e) => handleChange("name", e.target.value)}
+          disabled={!canSave}
+        />
+        <TextField
+          label="Life"
+          type="number"
+          value={form.life}
+          onChange={(e) => handleChange("life", Number(e.target.value))}
+          disabled={!canSave}
+        />
+        <TextField
+          label="XP"
+          type="number"
+          value={form.xp}
+          onChange={(e) => handleChange("xp", Number(e.target.value))}
+          disabled={!canSave}
+        />
+        <TextField
+          label="Agility"
+          type="number"
+          value={form.agility}
+          onChange={(e) => handleChange("agility", Number(e.target.value))}
+          disabled={!canSave}
+        />
+        <TextField
+          label="Strength"
+          type="number"
+          value={form.strength}
+          onChange={(e) => handleChange("strength", Number(e.target.value))}
+          disabled={!canSave}
+        />
+        <TextField
+          label="Vigor"
+          type="number"
+          value={form.vigor}
+          onChange={(e) => handleChange("vigor", Number(e.target.value))}
+          disabled={!canSave}
+        />
+        <TextField
+          label="Presence"
+          type="number"
+          value={form.presence}
+          onChange={(e) => handleChange("presence", Number(e.target.value))}
+          disabled={!canSave}
+        />
+        <TextField
+          label="Intellect"
+          type="number"
+          value={form.intellect}
+          onChange={(e) => handleChange("intellect", Number(e.target.value))}
+          disabled={!canSave}
+        />
+
+        <Box sx={{ display: "flex", justifyContent: "space-between", mt: 2 }}>
+          {canSave && (
+            <Button variant="contained" onClick={handleSubmit}>
+              Salvar
+            </Button>
+          )}
+          <Button variant="outlined" onClick={onClose}>
+            Fechar
+          </Button>
+        </Box>
+      </Box>
+    </Modal>
   );
 }

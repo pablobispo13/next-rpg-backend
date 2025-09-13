@@ -19,7 +19,7 @@ export default function LoginPage() {
       localStorage.setItem("role", data.user.role);
       localStorage.setItem("userId", data.user.id);
 
-      router.push(data.user.role === "MESTRE" ? "/front//mesa" : "/front//meu-personagem");
+      router.push("/front/mesa");
     } catch (err: any) {// eslint-disable-line @typescript-eslint/no-explicit-any
       alert(err.response?.data?.message || "Erro ao logar");
     }
@@ -32,7 +32,7 @@ export default function LoginPage() {
       localStorage.setItem("role", data.user.role);
       localStorage.setItem("userId", data.user.id);
 
-      router.push("/front/meu-personagem");
+      router.push("/front/mesa");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       alert(err.response?.data?.message || "Erro ao registrar");

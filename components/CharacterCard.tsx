@@ -1,6 +1,3 @@
-"use client";
-
-import React from "react";
 import { Card, CardContent, Typography, Button, Box } from "@mui/material";
 
 type Character = {
@@ -19,36 +16,29 @@ type Character = {
 
 type Props = {
   character: Character;
-  onEdit?: (char: Character) => void;
+  canEdit?: boolean; // se o jogador pode editar
+  onEdit?: () => void;
+  onView?: () => void;
 };
 
-export default function CharacterCard({ character, onEdit }: Props) {
+export default function CharacterCard({ character, canEdit = false, onEdit, onView }: Props) {
   return (
-    <Card sx={{ width: 250 }}>
+    <Card sx={{ width: 200 }}>
       <CardContent>
         <Typography variant="h6">{character.name}</Typography>
-        {character.owner && (
-          <Typography variant="caption">Dono: {character.owner.username}</Typography>
-        )}
-        <Box sx={{ mt: 1 }}>
-          <Typography>Life: {character.life}</Typography>
-          <Typography>XP: {character.xp}</Typography>
-          <Typography>Agility: {character.agility}</Typography>
-          <Typography>Strength: {character.strength}</Typography>
-          <Typography>Vigor: {character.vigor}</Typography>
-          <Typography>Presence: {character.presence}</Typography>
-          <Typography>Intellect: {character.intellect}</Typography>
+        <Typography>Life: {character.life}</Typography>
+        <Box sx={{ display: "flex", gap: 1, mt: 1 }}>
+          {canEdit && onEdit && (
+            <Button size="small" variant="contained" onClick={onEdit}>
+              Editar
+            </Button>
+          )}
+          {onView && (
+            <Button size="small" variant="outlined" onClick={onView}>
+              Visualizar
+            </Button>
+          )}
         </Box>
-        {onEdit && (
-          <Button
-            variant="contained"
-            size="small"
-            sx={{ mt: 2 }}
-            onClick={() => onEdit(character)}
-          >
-            Editar
-          </Button>
-        )}
       </CardContent>
     </Card>
   );

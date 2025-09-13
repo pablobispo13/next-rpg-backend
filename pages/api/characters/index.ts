@@ -26,7 +26,6 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse): Promise
 
   if (req.method === "POST") {
     try {
-      // JOGADOR só cria para si
       if (user.role !== "MESTRE") {
         const existing = await prisma.character.findFirst({ where: { ownerId: user.userId } });
         if (existing) return res.status(400).json({ message: "Você já possui um personagem" });
@@ -43,9 +42,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse): Promise
         intellect: req.body.intellect ?? 10,
         ownerId: user.userId,
       };
-      // NÃO incluir passiveSkillId se for null
       if (req.body.passiveSkillId) data.passiveSkillId = req.body.passiveSkillId;
-
 
       const char = await prisma.character.create({ data });
 
