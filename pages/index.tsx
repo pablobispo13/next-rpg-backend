@@ -1,22 +1,16 @@
-"use client";
-
+// pages/page.tsx
 import { useEffect } from "react";
 import { useRouter } from "next/router";
-import { CircularProgress, Box, Typography } from "@mui/material";
+import { useAuth } from "../context/AuthContext";
 
-export default function DashboardPage() {
-  const router = useRouter();
+export default function HomePage() {
+    const router = useRouter();
+    const { user } = useAuth();
 
-  useEffect(() => {
-    router.push("/front");
-  }, [router]);
+    useEffect(() => {
+        if (user) router.push("/protected/mesa");
+        else router.push("/login");
+    }, [user, router]);
 
-  return (
-    <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", mt: 10 }}>
-      <CircularProgress />
-      <Typography variant="h6" sx={{ mt: 2 }}>
-        Redirecionando para seu painel...
-      </Typography>
-    </Box>
-  );
+    return null;
 }

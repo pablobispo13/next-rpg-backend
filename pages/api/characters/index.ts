@@ -10,13 +10,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse): Promise
 
   if (req.method === "GET") {
     try {
-      let chars;
-      if (user.role === "MESTRE") {
-        chars = await prisma.character.findMany({ include: { owner: true } });
-      } else {
-        const char = await prisma.character.findFirst({ where: { ownerId: user.userId } });
-        chars = char ? [char] : [];
-      }
+      const chars = await prisma.character.findMany({ include: { owner: true } });
       return res.status(200).json({ characters: chars });
     } catch (err) {
       console.error("Erro no GET /characters:", err);

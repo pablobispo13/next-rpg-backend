@@ -1,34 +1,22 @@
+import { Character } from "@/protected/mesa";
 import { Card, CardContent, Typography, Button, Box } from "@mui/material";
-
-type Character = {
-  id: string;
-  name: string;
-  life: number;
-  xp: number;
-  agility: number;
-  strength: number;
-  vigor: number;
-  presence: number;
-  intellect: number;
-  ownerId: string;
-  owner?: { username: string };
-};
 
 type Props = {
   character: Character;
-  canEdit?: boolean; // se o jogador pode editar
+  edit?: boolean;
   onEdit?: () => void;
   onView?: () => void;
 };
 
-export default function CharacterCard({ character, canEdit = false, onEdit, onView }: Props) {
+export default function CharacterCard({ character, edit = false, onEdit, onView }: Props) {
   return (
     <Card sx={{ width: 200 }}>
       <CardContent>
         <Typography variant="h6">{character.name}</Typography>
         <Typography>Life: {character.life}</Typography>
         <Box sx={{ display: "flex", gap: 1, mt: 1 }}>
-          {canEdit && onEdit && (
+
+          {edit && (
             <Button size="small" variant="contained" onClick={onEdit}>
               Editar
             </Button>
