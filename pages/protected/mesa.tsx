@@ -86,7 +86,6 @@ export default function MesaUnificadaFinal() {
             return serverChar;
           })
         );
-        toast.info("Mudanças foram aplicadas!");
         justSavedRef.current = false;
       }, 100);
     };
