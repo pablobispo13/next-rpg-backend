@@ -59,7 +59,7 @@ export default function EditCharacterModal({
       <DialogTitle id="scroll-dialog-title">Modal de edição de personagem</DialogTitle>
       <DialogContent>
         <Stack gap={2}>
-          <Typography>Dados do personagem, pertence á: {character.owner?.username || "Mestre"}</Typography>
+          <Typography>Dados do personagem, pertence á: {character?.owner?.username || "Mestre"}</Typography>
           <Stack gap={1} justifyContent={"space-between"} direction={"row"}>
             <TextField
               label="Nome"

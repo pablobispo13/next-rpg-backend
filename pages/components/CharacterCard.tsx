@@ -9,6 +9,7 @@ type Props = {
 };
 
 export default function CharacterCard({ character, edit = false, onEdit, onView }: Props) {
+  if (!character) return <></>;
   return (
     <Card sx={{ width: 200 }}>
       <CardContent>

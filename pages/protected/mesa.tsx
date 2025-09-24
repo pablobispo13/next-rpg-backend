@@ -169,50 +169,46 @@ export default function MesaUnificadaFinal() {
             <>
               Personagens do mestre
               <Stack sx={{ display: "flex", flexDirection: "row", gap: 2 }}>
-                {characters.map(
+                {characters.filter((char) => char.owner?.role === "MESTRE").map(
                   (char) =>
-                    char.owner?.role == "MESTRE" && (
-                      <CharacterCard
-                        key={char.id}
-                        edit={
-                          user?.role === "MESTRE" || char.ownerId === user.id
-                        }
-                        character={char}
-                        onEdit={() => {
-                          setOpenModal(true);
-                          setEditing(char);
-                        }}
-                        onView={() => {
-                          setViewing(char);
-                          setOpenModal(true);
-                        }}
-                      />
-                    )
+                    <CharacterCard
+                      key={char.id}
+                      edit={
+                        user?.role === "MESTRE" || char.ownerId === user.id
+                      }
+                      character={char}
+                      onEdit={() => {
+                        setOpenModal(true);
+                        setEditing(char);
+                      }}
+                      onView={() => {
+                        setViewing(char);
+                        setOpenModal(true);
+                      }}
+                    />
                 )}
               </Stack>
             </>
           )}
           Personagens
           <Stack sx={{ display: "flex", flexDirection: "row", gap: 2 }}>
-            {characters.map(
+            {characters.filter((char) => char.owner?.role !== "MESTRE").map(
               (char) =>
-                char.owner?.role != "MESTRE" && (
-                  <CharacterCard
-                    key={char.id}
-                    edit={
-                      user?.role === "MESTRE" || char.ownerId === user.id
-                    }
-                    character={char}
-                    onEdit={() => {
-                      setOpenModal(true);
-                      setEditing(char);
-                    }}
-                    onView={() => {
-                      setViewing(char);
-                      setOpenModal(true);
-                    }}
-                  />
-                )
+                <CharacterCard
+                  key={char.id}
+                  edit={
+                    user?.role === "MESTRE" || char.ownerId === user.id
+                  }
+                  character={char}
+                  onEdit={() => {
+                    setOpenModal(true);
+                    setEditing(char);
+                  }}
+                  onView={() => {
+                    setViewing(char);
+                    setOpenModal(true);
+                  }}
+                />
             )}
           </Stack>
         </Stack>
