@@ -22,7 +22,7 @@ export type Character = {
   owner?: { username: string; role: "MESTRE" | "JOGADOR" };
 };
 
-export default function MesaUnificadaFinal() {
+export default function Mesa() {
   const router = useRouter();
   const { user } = useAuth();
 
