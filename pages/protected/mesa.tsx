@@ -32,14 +32,19 @@ export default function MesaUnificadaFinal() {
   const [openModal, setOpenModal] = useState<boolean>(false);
   const [token, setToken] = useState("");
   const [roomToken, setRoomToken] = useState("");
+
   const eventSourceRef = useRef<EventSource | null>(null);
   const pendingUpdateRef = useRef<NodeJS.Timeout | null>(null);
   const justSavedRef = useRef(false);
 
+  const editingRef = useRef<Character | null>(null);
+  const viewingRef = useRef<Character | null>(null);
+
+  useEffect(() => { editingRef.current = editing; }, [editing]);
+  useEffect(() => { viewingRef.current = viewing; }, [viewing]);
+
   useEffect(() => {
-    if (!user) {
-      router.push("/login");
-    }
+    if (!user) router.push("/login");
   }, [user, router]);
 
   useEffect(() => {
@@ -62,27 +67,44 @@ export default function MesaUnificadaFinal() {
     }
   }, [token]);
 
+  const handleMessage = useCallback((event: MessageEvent) => {
+    const data = JSON.parse(event.data) as { characters: Character[]; roomToken: string };
 
-  const handleMessage = useCallback(
-    (event: MessageEvent) => {
-      const data = JSON.parse(event.data) as { characters: Character[]; roomToken: string };
-      if (pendingUpdateRef.current) clearTimeout(pendingUpdateRef.current);
-      pendingUpdateRef.current = setTimeout(() => {
-        setRoomToken(data.roomToken);
-        setCharacters(() =>
-          data.characters.map((serverChar) => {
-            if (justSavedRef.current && editing?.id === serverChar.id) return editing;
+    if (pendingUpdateRef.current) clearTimeout(pendingUpdateRef.current);
 
-            if (viewing?.id === serverChar.id) return viewing;
-            return serverChar;
-          })
-        );
+    pendingUpdateRef.current = setTimeout(() => {
+      setRoomToken(data.roomToken);
 
-        justSavedRef.current = false;
-      }, 100);
-    },
-    [editing, viewing]
-  );
+      setCharacters((prev) =>
+        data.characters.map((serverChar) => {
+          if (justSavedRef.current && editingRef.current?.id === serverChar.id) return editingRef.current;
+
+          if (viewingRef.current?.id === serverChar.id) return viewingRef.current;
+
+          const existing = prev.find((c) => c.id === serverChar.id);
+
+          if (
+            existing &&
+            existing.name === serverChar.name &&
+            existing.life === serverChar.life &&
+            existing.xp === serverChar.xp &&
+            existing.agility === serverChar.agility &&
+            existing.strength === serverChar.strength &&
+            existing.vigor === serverChar.vigor &&
+            existing.presence === serverChar.presence &&
+            existing.intellect === serverChar.intellect
+          ) {
+            return existing;
+          }
+
+          return serverChar;
+        })
+      );
+
+      justSavedRef.current = false;
+    }, 100);
+  }, []);
+
 
   const connectStream = useCallback(() => {
     if (!token) return;
@@ -104,7 +126,6 @@ export default function MesaUnificadaFinal() {
 
   useEffect(() => {
     if (!token) return;
-
     fetchCharacters();
     connectStream();
 
@@ -155,16 +176,16 @@ export default function MesaUnificadaFinal() {
     }
   };
 
-  if (!user) {
-    return <></>;
-  }
+  if (!user) return <></>;
+
+  const mestreCharacters = characters.filter((c) => c.owner?.role === "MESTRE");
+  const jogadorCharacters = characters.filter((c) => c.owner?.role !== "MESTRE");
 
   return (
     <>
       <Box sx={{ p: 4 }}>
         <Typography variant="h4" gutterBottom>
-          Mesa de Personagens {user?.role === "MESTRE" ? "(Mestre)" : ""} — Sala:{" "}
-          {roomToken || "..."}
+          Mesa de Personagens {user?.role === "MESTRE" ? "(Mestre)" : ""} — Sala: {roomToken || "..."}
         </Typography>
 
         {user?.role === "MESTRE" && (
@@ -172,52 +193,48 @@ export default function MesaUnificadaFinal() {
             Criar Novo Personagem
           </Button>
         )}
+
         <Stack display={"flex"} gap={2}>
           {user?.role === "MESTRE" && (
             <>
               Personagens do mestre
               <Stack sx={{ display: "flex", flexDirection: "row", gap: 2 }}>
-                {characters.filter((char) => char.owner?.role === "MESTRE").map(
-                  (char) =>
-                    <CharacterCard
-                      key={char.id}
-                      edit={
-                        user?.role === "MESTRE" || char.ownerId === user.id
-                      }
-                      character={char}
-                      onEdit={() => {
-                        setOpenModal(true);
-                        setEditing(char);
-                      }}
-                      onView={() => {
-                        setViewing(char);
-                        setOpenModal(true);
-                      }}
-                    />
-                )}
+                {mestreCharacters.map((char) => (
+                  <CharacterCard
+                    key={char.id}
+                    edit={user?.role === "MESTRE" || char.ownerId === user.id}
+                    character={char}
+                    onEdit={() => {
+                      setOpenModal(true);
+                      setEditing(char);
+                    }}
+                    onView={() => {
+                      setViewing(char);
+                      setOpenModal(true);
+                    }}
+                  />
+                ))}
               </Stack>
             </>
           )}
+
           Personagens
           <Stack sx={{ display: "flex", flexDirection: "row", gap: 2 }}>
-            {characters.filter((char) => char.owner?.role !== "MESTRE").map(
-              (char) =>
-                <CharacterCard
-                  key={char.id}
-                  edit={
-                    user?.role === "MESTRE" || char.ownerId === user.id
-                  }
-                  character={char}
-                  onEdit={() => {
-                    setOpenModal(true);
-                    setEditing(char);
-                  }}
-                  onView={() => {
-                    setViewing(char);
-                    setOpenModal(true);
-                  }}
-                />
-            )}
+            {jogadorCharacters.map((char) => (
+              <CharacterCard
+                key={char.id}
+                edit={user?.role === "MESTRE" || char.ownerId === user.id}
+                character={char}
+                onEdit={() => {
+                  setOpenModal(true);
+                  setEditing(char);
+                }}
+                onView={() => {
+                  setViewing(char);
+                  setOpenModal(true);
+                }}
+              />
+            ))}
           </Stack>
         </Stack>
       </Box>
