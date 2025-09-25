@@ -1,11 +1,10 @@
 import axios from "axios";
 import { toast } from "react-toastify";
 
-// Função de logout centralizada
 export function handleLogout() {
   if (typeof window !== "undefined") {
     localStorage.removeItem("token");
-    window.location.href = "/login"; // redireciona pro login
+    window.location.href = "/login"; 
   }
 }
 
@@ -13,7 +12,6 @@ const api = axios.create({
   baseURL: "/api",
 });
 
-// Interceptor para incluir token
 api.interceptors.request.use((config) => {
   if (typeof window !== "undefined") {
     const token = localStorage.getItem("token");
@@ -24,7 +22,6 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Interceptor de resposta
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -41,7 +38,7 @@ api.interceptors.response.use(
           message = "Sessão expirada. Faça login novamente.";
           toast.error(message);
           handleLogout();
-          return Promise.reject(error); // encerra aqui
+          return Promise.reject(error);
         case 403:
           message = "Você não tem permissão para executar essa ação.";
           break;

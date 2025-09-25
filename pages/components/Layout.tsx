@@ -1,4 +1,3 @@
-// components/Layout.tsx
 import { ReactNode } from "react";
 import { AppBar, Toolbar, Typography, Button } from "@mui/material";
 import { useAuth } from "../../context/AuthContext";

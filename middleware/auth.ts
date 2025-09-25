@@ -1,13 +1,10 @@
-// pages/api/middleware/auth.ts
 import { NextApiRequest, NextApiResponse } from "next";
 import jwt, { JwtPayload } from "jsonwebtoken";
 
-// Estende o NextApiRequest para incluir a propriedade user
 export interface AuthenticatedRequest extends NextApiRequest {
   user?: string | JwtPayload;
 }
 
-// Tipagem para o handler
 type ApiHandler = (req: AuthenticatedRequest, res: NextApiResponse) => Promise<void> | void;
 
 export const authenticate =

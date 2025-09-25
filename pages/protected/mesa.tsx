@@ -5,7 +5,6 @@ import CharacterCard from "../components/CharacterCard";
 import EditCharacterModal from "../components/EditCharacterModal";
 import { Box, Typography, Button, Stack } from "@mui/material";
 import axios from "axios";
-import { toast } from "react-toastify";
 import { useRouter } from "next/router";
 import { useAuth } from "../../context/AuthContext";
 
@@ -33,17 +32,16 @@ export default function MesaUnificadaFinal() {
   const [openModal, setOpenModal] = useState<boolean>(false);
   const [token, setToken] = useState("");
   const [roomToken, setRoomToken] = useState("");
+  const eventSourceRef = useRef<EventSource | null>(null);
   const pendingUpdateRef = useRef<NodeJS.Timeout | null>(null);
   const justSavedRef = useRef(false);
 
-  // 🔹 Sempre executa o hook, só redireciona caso não tenha usuário
   useEffect(() => {
     if (!user) {
       router.push("/login");
     }
   }, [user, router]);
 
-  // 🔹 Sempre chamado
   useEffect(() => {
     if (typeof window !== "undefined") {
       const localToken = localStorage.getItem("token");
@@ -64,46 +62,58 @@ export default function MesaUnificadaFinal() {
     }
   }, [token]);
 
-  useEffect(() => {
-    if (!token) return;
 
-    fetchCharacters();
-    const es = new EventSource("/api/stream");
-
-    es.onmessage = (event) => {
-      const data = JSON.parse(event.data) as {
-        characters: Character[];
-        roomToken: string;
-      };
+  const handleMessage = useCallback(
+    (event: MessageEvent) => {
+      const data = JSON.parse(event.data) as { characters: Character[]; roomToken: string };
       if (pendingUpdateRef.current) clearTimeout(pendingUpdateRef.current);
       pendingUpdateRef.current = setTimeout(() => {
         setRoomToken(data.roomToken);
         setCharacters(() =>
           data.characters.map((serverChar) => {
-            if (justSavedRef.current && editing?.id === serverChar.id)
-              return editing;
+            if (justSavedRef.current && editing?.id === serverChar.id) return editing;
+
             if (viewing?.id === serverChar.id) return viewing;
             return serverChar;
           })
         );
+
         justSavedRef.current = false;
       }, 100);
-    };
+    },
+    [editing, viewing]
+  );
+
+  const connectStream = useCallback(() => {
+    if (!token) return;
+    if (eventSourceRef.current) return;
+
+    const es = new EventSource("/api/stream");
+    eventSourceRef.current = es;
+
+    es.onmessage = handleMessage;
 
     es.onerror = () => {
       es.close();
+      eventSourceRef.current = null;
       setTimeout(() => {
-        if (typeof window !== "undefined") {
-          new EventSource("/api/stream");
-        }
+        if (!eventSourceRef.current) connectStream();
       }, 5000);
     };
+  }, [handleMessage, token]);
+
+  useEffect(() => {
+    if (!token) return;
+
+    fetchCharacters();
+    connectStream();
 
     return () => {
-      es.close();
+      eventSourceRef.current?.close();
+      eventSourceRef.current = null;
       if (pendingUpdateRef.current) clearTimeout(pendingUpdateRef.current);
     };
-  }, [token, fetchCharacters, editing, viewing]);
+  }, [token, fetchCharacters, connectStream]);
 
   const handleSave = async (updated: Character) => {
     if (!token) return;
@@ -145,7 +155,6 @@ export default function MesaUnificadaFinal() {
     }
   };
 
-  // 🔹 Renderização condicional só no return (não antes dos hooks)
   if (!user) {
     return <></>;
   }

@@ -32,14 +32,9 @@ model Character {
   vigor     Int
   presence  Int
   intellect Int
-
-  // Relação passiva opcional (one-to-many)
   passiveSkillId String? @db.ObjectId
   passiveSkill   Skill?  @relation("PassiveSkillRelation", fields: [passiveSkillId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-
-  // Relação ativa (várias skills ativas)
   skills Skill[] @relation("ActiveSkillsRelation")
-
   inventory Inventory[]
   ownerId   String      @db.ObjectId
   owner     User        @relation(fields: [ownerId], references: [id])
@@ -51,11 +46,7 @@ model Skill {
   description String
   damage      Int
   type        SkillType
-
-  // Relação passiva (vários personagens podem usar a mesma skill ou não ter nenhuma)
   passiveFor Character[] @relation("PassiveSkillRelation")
-
-  // Relação ativa
   character   Character? @relation("ActiveSkillsRelation", fields: [characterId], references: [id])
   characterId String?    @db.ObjectId
 }

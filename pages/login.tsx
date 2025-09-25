@@ -1,4 +1,3 @@
-// pages/login.tsx
 import { Container, Tabs, Tab, Box, TextField, Button } from "@mui/material";
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
@@ -16,7 +15,7 @@ export default function LoginPage() {
   const { user } = useAuth();
 
   useEffect(() => {
-    if (!user) router.push("/login"); // redireciona se não estiver logado
+    if (!user) router.push("/login"); 
     else if (user) router.push("/protected/mesa")
   }, [user, router]);
 

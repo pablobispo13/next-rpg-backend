@@ -1,10 +1,8 @@
 import { Character } from "@/protected/mesa";
 import * as yup from "yup";
 
-// Tipo para edição (sem id, ownerId e owner)
 export type EditableCharacter = Omit<Character, "id" | "ownerId" | "owner">;
 
-// Schema Yup para validar os campos editáveis
 export const characterSchema: yup.ObjectSchema<EditableCharacter> = yup.object({
     name: yup.string().required("O nome é obrigatório"),
     life: yup.number().required("Life é obrigatório").min(0),

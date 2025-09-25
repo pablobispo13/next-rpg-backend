@@ -3,10 +3,8 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-// Array global de clientes SSE
 export const clients: NextApiResponse[] = [];
 
-// Notifica todos os clientes com todos os personagens
 export async function notifyClients() {
   const characters = await prisma.character.findMany({ include: { owner: true } });
 
