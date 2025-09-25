@@ -4,7 +4,7 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 let clients: NextApiResponse[] = [];
 
-const ROOM_TOKEN = "mesa-unificada-123";
+const ROOM_TOKEN = "Quarentena";
 
 export const notifyClients = async () => {
   const characters = await prisma.character.findMany({ include: { owner: true } });
