@@ -1,7 +1,7 @@
 import { NextApiResponse } from "next";
 import { PrismaClient } from "@prisma/client";
-import { authenticate, AuthenticatedRequest } from "../../../lib/auth";
-import { notifyClients } from "../stream";
+import { authenticate, AuthenticatedRequest } from "../../../../lib/auth";
+import { notifyClients } from "../../stream";
 
 const prisma = new PrismaClient();
 
@@ -9,7 +9,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse): Promise
   const { id } = req.query;
   const user = req.user!;
 
-  const character = await prisma.character.findUnique({ where: { id: id as string } });
+  const character = await prisma.character.findUnique({ include: { owner: true }, where: { id: id as string } });
   if (!character) return res.status(404).json({ message: "Personagem não encontrado" });
 
   if (user.role !== "MESTRE" && character.ownerId !== user.userId)
@@ -17,6 +17,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse): Promise
 
   if (req.method === "PUT") {
     const updated = await prisma.character.update({
+      include: { owner: true },
       where: { id: id as string },
       data: {
         name: req.body.name,

@@ -1,8 +1,8 @@
 "use client";
 
+import axios from "axios";
 import { useEffect, } from "react";
 import { TextField, Button, Typography, Dialog, DialogTitle, DialogContent, DialogActions, Stack } from "@mui/material";
-import axios from "axios";
 import { Character } from "@/protected/mesa";
 import { useCharacterForm } from "../../hooks/useCharacterForm";
 import { EditableCharacter } from "../../validation/character";
@@ -22,9 +22,7 @@ export default function EditCharacterModal({
   onClose,
   onSave,
 }: Props) {
-  const token =
-    typeof window !== "undefined" ? localStorage.getItem("token") : null;
-
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
   const {
     register,
     handleSubmit,

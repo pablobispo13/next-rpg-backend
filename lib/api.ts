@@ -1,11 +1,13 @@
 import axios from "axios";
 import { toast } from "react-toastify";
 
-export function handleLogout() {
-  if (typeof window !== "undefined") {
-    localStorage.removeItem("token");
-    window.location.href = "/login"; 
+export function handleLogout(reason?: "expired" | "manual") {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem("token");
+  if (reason) {
+    localStorage.setItem("logout_reason", reason);
   }
+  window.location.href = "/login";
 }
 
 const api = axios.create({
@@ -34,11 +36,17 @@ api.interceptors.response.use(
         case 400:
           message = data?.message || "Requisição inválida.";
           break;
-        case 401:
-          message = "Sessão expirada. Faça login novamente.";
-          toast.error(message);
-          handleLogout();
+        case 401: {
+          const isAuthRoute =
+            error.config?.url?.includes("/auth/login") ||
+            error.config?.url?.includes("/auth/register");
+
+          if (!isAuthRoute) {
+            handleLogout("expired");
+          }
+
           return Promise.reject(error);
+        }
         case 403:
           message = "Você não tem permissão para executar essa ação.";
           break;

@@ -21,7 +21,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse): Promise
   if (req.method === "POST") {
     try {
       if (user.role !== "MESTRE") {
-        const existing = await prisma.character.findFirst({ where: { ownerId: user.userId } });
+        const existing = await prisma.character.findFirst({ include: { owner: true }, where: { ownerId: user.userId } });
         if (existing) return res.status(400).json({ message: "Você já possui um personagem" });
       }
 

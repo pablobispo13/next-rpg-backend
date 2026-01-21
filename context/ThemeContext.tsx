@@ -1,48 +1,66 @@
-import { ThemeProvider, createTheme, useMediaQuery } from "@mui/material";
-import React, { createContext, ReactElement, useEffect, useState } from "react";
+import {
+    ThemeProvider,
+    createTheme,
+    useMediaQuery,
+} from "@mui/material";
+import React, {
+    createContext,
+    ReactElement,
+    useEffect,
+    useState,
+} from "react";
+
+type ThemeType = "light" | "dark";
 
 interface ThemeContextInterface {
+    mode: ThemeType;
     toggleColorMode: () => void;
 }
 
 export const ThemeContext = createContext<ThemeContextInterface>({
+    mode: "dark",
     toggleColorMode: () => { },
 });
 
-type ThemeType = "light" | "dark";
-
 interface ThemeContextProviderInterface {
-    children: ReactElement<ReactElement> | null;
+    children: ReactElement | null;
 }
 
 export const ThemeContextProvider: React.FC<ThemeContextProviderInterface> = ({
     children,
 }) => {
-    const prefersDarkMode = useMediaQuery("(prefers-color-scheme: dark)");
-    const getTheme = () => {
-        const theme = typeof window !== "undefined" ? localStorage.getItem("theme") : "dark";
-        return theme === "light" || theme === "dark"
-            ? theme
-            : prefersDarkMode
-                ? "dark"
-                : "light";
-    };
+    // Estado inicial FIXO → SSR e client começam iguais
+    const [mode, setMode] = useState<ThemeType>("dark");
 
-    const [mode, setMode] = useState<ThemeType>(getTheme());
+    // Só roda no client
+    const prefersDarkMode = useMediaQuery(
+        "(prefers-color-scheme: dark)",
+        { noSsr: true }
+    );
+
+    // Hidratação segura
+    useEffect(() => {
+        const storedTheme = localStorage.getItem("theme");
+
+        if (storedTheme === "light" || storedTheme === "dark") {
+            setMode(storedTheme);
+        } else {
+            setMode(prefersDarkMode ? "dark" : "light");
+        }
+    }, [prefersDarkMode]);
 
     useEffect(() => {
         localStorage.setItem("theme", mode);
     }, [mode]);
 
-    const toggleColorMode = () =>
-        setMode((prevMode) => (prevMode === "light" ? "dark" : "light"));
+    const toggleColorMode = () => {
+        setMode((prev) => (prev === "light" ? "dark" : "light"));
+    };
 
     const scrollbarColor = mode === "dark" ? "#536480" : "#042e39";
 
     const theme = createTheme({
-        palette: {
-            mode,
-        },
+        palette: { mode },
         components: {
             MuiCssBaseline: {
                 styleOverrides: {
@@ -51,7 +69,10 @@ export const ThemeContextProvider: React.FC<ThemeContextProviderInterface> = ({
                             fontFamily: "'Rubik', sans-serif !important",
                         },
                         ".MuiAppBar-root": {
-                            background: mode === "dark" ? "#4c5d77e3" : "#06222fd1"
+                            background:
+                                mode === "dark"
+                                    ? "#4c5d77e3"
+                                    : "#06222fd1",
                         },
                         ".MuiMenuItem-root": {
                             borderRadius: "20px",
@@ -66,7 +87,6 @@ export const ThemeContextProvider: React.FC<ThemeContextProviderInterface> = ({
                         "*::-webkit-scrollbar": {
                             width: "12px",
                         },
-
                     },
                 },
             },
@@ -74,7 +94,7 @@ export const ThemeContextProvider: React.FC<ThemeContextProviderInterface> = ({
     });
 
     return (
-        <ThemeContext.Provider value={{ toggleColorMode }}>
+        <ThemeContext.Provider value={{ mode, toggleColorMode }}>
             <ThemeProvider theme={theme}>{children}</ThemeProvider>
         </ThemeContext.Provider>
     );

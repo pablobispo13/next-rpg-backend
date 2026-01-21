@@ -4,9 +4,10 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import CharacterCard from "../components/CharacterCard";
 import EditCharacterModal from "../components/EditCharacterModal";
 import { Box, Typography, Button, Stack } from "@mui/material";
-import axios from "axios";
 import { useRouter } from "next/router";
 import { useAuth } from "../../context/AuthContext";
+import { toast } from "react-toastify";
+import api, { handleLogout } from "../../lib/api";
 
 export type Character = {
   id: string;
@@ -25,7 +26,6 @@ export type Character = {
 export default function Mesa() {
   const router = useRouter();
   const { user } = useAuth();
-
   const [characters, setCharacters] = useState<Character[]>([]);
   const [editing, setEditing] = useState<Character | null>(null);
   const [viewing, setViewing] = useState<Character | null>(null);
@@ -35,10 +35,10 @@ export default function Mesa() {
   const pendingUpdateRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    if (!user) {
-      router.push("/login");
+    if (!token && !user) {
+      handleLogout("expired")
     }
-  }, [user, router]);
+  }, [user, token, router]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -50,7 +50,7 @@ export default function Mesa() {
   const fetchCharacters = useCallback(async () => {
     if (!token) return;
     try {
-      const res = await axios.get("/api/characters", {
+      const res = await api.get("/characters", {
         headers: { Authorization: `Bearer ${token}` },
       });
       setCharacters(res.data.characters);
@@ -99,15 +99,15 @@ export default function Mesa() {
   const handleSave = async (updated: Character) => {
     if (!token) return;
     try {
-      const res = await axios.put(`/api/characters/${updated.id}`, updated, {
+      const res = await api.put(`/characters/${updated.id}`, updated, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      // atualize com os dados retornados do backend
       setCharacters((prev) =>
         prev.map((c) => (c.id === res.data.id ? res.data : c))
       );
       setEditing(null);
       setOpenModal(false);
+      toast.success("Personagem editado com sucesso!")
     } catch (err) {
       console.error(err);
     }
@@ -116,8 +116,8 @@ export default function Mesa() {
   const handleCreate = async () => {
     if (!token) return;
     try {
-      const res = await axios.post(
-        "/api/characters",
+      const res = await api.post(
+        "/characters",
         {
           name: "Novo Personagem",
           life: 100,
@@ -137,7 +137,7 @@ export default function Mesa() {
     }
   };
 
-  if (!user) return <></>;
+  if (!user) return <>Carregando informações...</>;
 
   return (
     <>
