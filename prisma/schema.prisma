@@ -7,59 +7,320 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id         String      @id @default(auto()) @map("_id") @db.ObjectId
-  username   String      @unique
-  email      String      @unique
-  password   String
-  role       Role
-  createdAt  DateTime    @default(now())
-  characters Character[]
-}
+///////////////////////
+// ENUMS
+///////////////////////
 
 enum Role {
   MESTRE
   JOGADOR
 }
 
-model Character {
-  id        String @id @default(auto()) @map("_id") @db.ObjectId
-  name      String
-  life      Int
-  xp        Int
-  agility   Int
-  strength  Int
-  vigor     Int
-  presence  Int
-  intellect Int
-  passiveSkillId String? @db.ObjectId
-  passiveSkill   Skill?  @relation("PassiveSkillRelation", fields: [passiveSkillId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  skills Skill[] @relation("ActiveSkillsRelation")
-  inventory Inventory[]
-  ownerId   String      @db.ObjectId
-  owner     User        @relation(fields: [ownerId], references: [id])
+enum ActionType {
+  ATTACK
+  TEST
+  SPELL
+  HEAL
+  BUFF
+  DEBUFF
 }
 
-model Skill {
-  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+enum AttributeType {
+  STRENGTH
+  AGILITY
+  VIGOR
+  INTELLECT
+  PRESENCE
+}
+
+enum TargetType {
+  SELF
+  ALLY
+  ENEMY
+  MULTIPLE
+}
+
+enum LogType {
+  ROLL
+  DAMAGE
+  HEAL
+  HEAL_OVER_TIME
+  DAMAGE_OVER_TIME
+  COMBAT_START
+  COMBAT_END
+  TURN_START
+  TURN_END
+  MANUAL_OVERRIDE
+}
+
+enum StatusType {
+  STUNNED
+  POISONED
+  BURNED
+  FROZEN
+}
+
+enum EffectType {
+  HEAL_OVER_TIME
+  DAMAGE_OVER_TIME
+}
+
+///////////////////////
+// USER
+///////////////////////
+
+model User {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  username  String   @unique
+  email     String   @unique
+  password  String
+  role      Role
+  createdAt DateTime @default(now())
+
+  characters Character[]
+}
+
+///////////////////////
+// CHARACTER
+///////////////////////
+
+model Character {
+  id   String @id @default(auto()) @map("_id") @db.ObjectId
+  name String
+
+  life    Int
+  maxLife Int
+  xp      Int
+
+  strength  Int
+  agility   Int
+  vigor     Int
+  intellect Int
+  presence  Int
+
+  baseDefense Int @default(0)
+
+  // Presets automáticos de defesa
+  dodgePresetId String?       @db.ObjectId
+  dodgePreset   ActionPreset? @relation("DodgePreset", fields: [dodgePresetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  counterAttackPresetId String?       @db.ObjectId
+  counterAttackPreset   ActionPreset? @relation("CounterAttackPreset", fields: [counterAttackPresetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  ownerId String @db.ObjectId
+  owner   User   @relation(fields: [ownerId], references: [id])
+
+  presets   ActionPreset[] @relation("CharacterPresets")
+  inventory Inventory[]
+
+  actionLogs ActionLog[] @relation("ActionAuthor")
+  targetLogs ActionLog[] @relation("ActionTarget")
+
+  combatParticipants CombatParticipant[]
+  turns              CombatTurn[]
+
+  rollResults RollResult[]
+
+  // Status temporários
+  statusEffects CharacterEffect[]
+}
+
+///////////////////////
+// ACTION PRESET
+///////////////////////
+
+model ActionPreset {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
   name        String
   description String
-  damage      Int
-  type        SkillType
-  passiveFor Character[] @relation("PassiveSkillRelation")
-  character   Character? @relation("ActiveSkillsRelation", fields: [characterId], references: [id])
-  characterId String?    @db.ObjectId
+
+  type       ActionType
+  targetType TargetType
+
+  diceFormula String
+  modifier    Int    @default(0)
+
+  critThreshold  Int?
+  critMultiplier Float?
+
+  requiresTurn     Boolean @default(true)
+  allowOutOfCombat Boolean @default(false)
+  appliesEffect    Boolean @default(true)
+
+  attribute AttributeType
+
+  // NOVOS CAMPOS
+  durationTurns Int? // duração de buffs/debuffs
+  statAffected  AttributeType?
+  effectAmount  Int?
+  statusApplied StatusType?
+
+  characterId String    @db.ObjectId
+  character   Character @relation("CharacterPresets", fields: [characterId], references: [id])
+
+  dodgeCharacters         Character[] @relation("DodgePreset")
+  counterAttackCharacters Character[] @relation("CounterAttackPreset")
+
+  rolls            RollResult[]
+  inventories      Inventory[]
+  characterEffects CharacterEffect[]
 }
 
-enum SkillType {
-  PASSIVE
-  ACTIVE
-}
+///////////////////////
+// ROLL RESULT
+///////////////////////
 
-model Inventory {
-  id          String    @id @default(auto()) @map("_id") @db.ObjectId
-  name        String
-  quantity    Int
+model RollResult {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
   characterId String    @db.ObjectId
   character   Character @relation(fields: [characterId], references: [id])
+
+  presetId String       @db.ObjectId
+  preset   ActionPreset @relation(fields: [presetId], references: [id])
+
+  combatId String? @db.ObjectId
+  combat   Combat? @relation(fields: [combatId], references: [id])
+
+  turnId String?     @db.ObjectId
+  turn   CombatTurn? @relation(fields: [turnId], references: [id])
+
+  targetIds String[] @db.ObjectId
+
+  diceRolled String
+  rolls      Int[]
+  modifier   Int
+  total      Int
+
+  success  Boolean? // Será definido após reação do alvo
+  critical Boolean
+
+  damage  Int?
+  healing Int?
+
+  // Reações
+  pendingReaction Boolean @default(false)
+  reactionType    String? // "DODGE" | "COUNTER_ATTACK"
+  reacted         Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  logs ActionLog[] @relation("RollLogs")
+}
+
+///////////////////////
+// ACTION LOG
+///////////////////////
+
+model ActionLog {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  type    LogType
+  message String
+
+  characterId String?    @db.ObjectId
+  character   Character? @relation("ActionAuthor", fields: [characterId], references: [id])
+
+  targetId String?    @db.ObjectId
+  target   Character? @relation("ActionTarget", fields: [targetId], references: [id])
+
+  rollId String?     @db.ObjectId
+  roll   RollResult? @relation("RollLogs", fields: [rollId], references: [id])
+
+  combatId String? @db.ObjectId
+  combat   Combat? @relation("CombatLogs", fields: [combatId], references: [id])
+
+  turnId String?     @db.ObjectId
+  turn   CombatTurn? @relation("TurnLogs", fields: [turnId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+///////////////////////
+// INVENTORY
+///////////////////////
+
+model Inventory {
+  id       String @id @default(auto()) @map("_id") @db.ObjectId
+  name     String
+  quantity Int
+
+  characterId String    @db.ObjectId
+  character   Character @relation(fields: [characterId], references: [id])
+
+  presetId String?       @db.ObjectId // vincula item a preset
+  preset   ActionPreset? @relation(fields: [presetId], references: [id])
+}
+
+///////////////////////
+// COMBAT
+///////////////////////
+
+model Combat {
+  id     String  @id @default(auto()) @map("_id") @db.ObjectId
+  active Boolean @default(true)
+  round  Int     @default(1)
+
+  currentTurnIndex Int @default(0)
+
+  createdAt DateTime @default(now())
+
+  participants CombatParticipant[]
+  turns        CombatTurn[]
+  logs         ActionLog[]         @relation("CombatLogs")
+  rollResults  RollResult[]
+}
+
+model CombatParticipant {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  combatId String @db.ObjectId
+  combat   Combat @relation(fields: [combatId], references: [id])
+
+  characterId String    @db.ObjectId
+  character   Character @relation(fields: [characterId], references: [id])
+
+  currentLife Int
+  initiative  Int?
+  turnOrder   Int?
+}
+
+///////////////////////
+// COMBAT TURNOS
+///////////////////////
+
+model CombatTurn {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  combatId String @db.ObjectId
+  combat   Combat @relation(fields: [combatId], references: [id])
+
+  characterId String    @db.ObjectId
+  character   Character @relation(fields: [characterId], references: [id])
+
+  turnNumber Int
+  startedAt  DateTime  @default(now())
+  endedAt    DateTime?
+
+  logs        ActionLog[]  @relation("TurnLogs")
+  rollResults RollResult[]
+}
+
+///////////////////////
+// EFFECTS TEMPORÁRIOS
+///////////////////////
+
+model CharacterEffect {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  characterId String    @db.ObjectId
+  character   Character @relation(fields: [characterId], references: [id])
+
+  presetId String       @db.ObjectId
+  preset   ActionPreset @relation(fields: [presetId], references: [id])
+
+  remainingTurns Int
+  appliedAt      DateTime   @default(now())
+  type           EffectType
+  value          Int
 }

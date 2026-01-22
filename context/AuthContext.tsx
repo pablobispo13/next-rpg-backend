@@ -6,7 +6,7 @@ import api from "../lib/api";
 
 type User = {
   id: string;
-  role: string;
+  role: "MESTRE" | "JOGADOR";
   username: string;
 };
 
@@ -31,85 +31,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const isAuthenticated = !!user && !!token;
 
+  // Inicializa auth
   useEffect(() => {
-    const initAuth = async () => {
-      const savedToken = localStorage.getItem("token");
+    const savedToken = localStorage.getItem("token");
+    if (!savedToken) {
+      setLoading(false);
+      return;
+    }
 
-      if (!savedToken) {
-        setLoading(false);
-        return;
-      }
+    setToken(savedToken);
 
-      try {
-        const { data } = await api.get("/auth/me", {
-          headers: {
-            Authorization: `Bearer ${savedToken}`,
-          },
-        });
-
-        setToken(savedToken);
-        setUser(data.user);
-      } catch {
+    api.get("/auth/me") // token é enviado pelo interceptor
+      .then(({ data }) => setUser(data.user))
+      .catch(() => {
         localStorage.removeItem("token");
-        setUser(null);
         setToken(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    initAuth();
+        setUser(null);
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   const login = async (email: string, password: string) => {
     const { data } = await api.post("/auth/login", { email, password });
-
     localStorage.setItem("token", data.token);
     setToken(data.token);
     setUser(data.user);
-
     router.replace("/protected/mesa");
   };
 
   const register = async (username: string, email: string, password: string) => {
-    const { data } = await api.post("/auth/register", {
-      username,
-      email,
-      password,
-    });
-
+    const { data } = await api.post("/auth/register", { username, email, password });
     localStorage.setItem("token", data.token);
     setToken(data.token);
     setUser(data.user);
-
     router.replace("/protected/mesa");
   };
 
   const logout = (reason?: "expired" | "manual") => {
     localStorage.removeItem("token");
-
-    if (reason) {
-      localStorage.setItem("logout_reason", reason);
-    }
-
+    if (reason) localStorage.setItem("logout_reason", reason);
     setUser(null);
     setToken(null);
-
     router.replace("/login");
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        token,
-        loading,
-        isAuthenticated,
-        login,
-        register,
-        logout,
-      }}
-    >
+    <AuthContext.Provider value={{ user, token, loading, isAuthenticated, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,21 +1,52 @@
-import type { NextApiResponse } from "next";
-import { PrismaClient } from "@prisma/client";
+import { NextApiResponse } from "next";
+import { prisma } from "./prisma";
 
-const prisma = new PrismaClient();
+type SSEClient = {
+  res: NextApiResponse;
+  userId: string;
+};
 
-export const clients: NextApiResponse[] = [];
+let clients: SSEClient[] = [];
+const ROOM_TOKEN = "Quarentena";
 
-export async function notifyClients() {
-  const characters = await prisma.character.findMany({ include: { owner: true } });
+export function addClient(client: SSEClient) {
+  clients.push(client);
+  console.log(`[SSE] Cliente conectado (${clients.length})`);
+}
 
-  console.log(`[SSE] Notificando ${clients.length} cliente(s)`);
+export function removeClient(client: SSEClient) {
+  clients = clients.filter((c) => c !== client);
+  console.log(`[SSE] Cliente desconectado (${clients.length})`);
+}
 
-  clients.forEach((res, i) => {
+/**
+ * Notifica todos os clientes SSE com o estado atual
+ * Pode enviar payload customizado ou o padrão de characters
+ */
+export async function notifyClients(customPayload?: any): Promise<void> {
+  let payload: any;
+
+  if (customPayload) {
+    payload = customPayload;
+  } else {
+    const characters = await prisma.character.findMany({
+      include: {
+        owner: { select: { id: true, username: true } },
+      },
+    });
+
+    payload = {
+      roomToken: ROOM_TOKEN,
+      characters,
+    };
+  }
+
+  clients.forEach((client) => {
     try {
-      res.write(`data: ${JSON.stringify(characters)}\n\n`);
-      console.log(`[SSE] Cliente ${i + 1} notificado`);
+      client.res.write(`data: ${JSON.stringify(payload)}\n\n`);
     } catch (err) {
-      console.error(`[SSE] Erro notificando cliente ${i + 1}:`, err);
+      console.warn(`[SSE] Erro ao notificar cliente ${client.userId}: ${err}`);
+      removeClient(client);
     }
   });
 }

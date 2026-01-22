@@ -1,45 +1,46 @@
-import type { NextApiRequest, NextApiResponse } from "next";
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
-let clients: NextApiResponse[] = [];
-
-const ROOM_TOKEN = "Quarentena";
-
-export const notifyClients = async () => {
-  const characters = await prisma.character.findMany({ include: { owner: true } });
-  const payload = { characters, roomToken: ROOM_TOKEN };
-  clients.forEach((res) => res.write(`data: ${JSON.stringify(payload)}\n\n`));
-};
+import type { NextApiResponse, NextApiRequest } from "next";
+import { prisma } from "../../lib/prisma";
+import { addClient, removeClient } from "../../lib/sse";
+import jwt from "jsonwebtoken";
+import { AuthUser } from "../../lib/auth";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== "GET") return res.status(405).end();
+  if (req.method !== "GET") {
+    res.status(405).end();
+    return;
+  }
 
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
+  try {
+    const token = req.query.token as string;
+    if (!token) return res.status(401).json({ message: "Token ausente" });
 
-  clients.push(res);
-  console.log(`[SSE] Novo cliente conectado. Total: ${clients.length}`);
+    const secret = process.env.JWT_SECRET!;
+    const decoded = jwt.verify(token, secret) as AuthUser;
 
-  req.on("close", () => {
-    clients = clients.filter((c) => c !== res);
-    console.log(`[SSE] Cliente desconectado. Total: ${clients.length}`);
-  });
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    });
 
-  const characters = await prisma.character.findMany({ include: { owner: true } });
-  const payload = {
-    characters,
-    roomToken: ROOM_TOKEN,
-  };
-  res.write(`data: ${JSON.stringify(payload)}\n\n`);
+    const client = {
+      res,
+      userId: decoded.userId,
+    };
 
-  const interval = setInterval(async () => {
-    if (clients.includes(res)) {
-      const chars = await prisma.character.findMany({ include: { owner: true } });
-      res.write(`data: ${JSON.stringify({ characters: chars, roomToken: ROOM_TOKEN })}\n\n`);
-    }
-  }, 2000);
+    addClient(client);
 
-  req.on("close", () => clearInterval(interval));
+    req.on("close", () => {
+      removeClient(client);
+    });
+
+    const characters = await prisma.character.findMany({
+      include: { owner: { select: { id: true, username: true } } },
+    });
+
+    res.write(`data: ${JSON.stringify({ roomToken: "Quarentena", characters })}\n\n`);
+  } catch (err) {
+    console.error(err);
+    res.status(401).end();
+  }
 }
