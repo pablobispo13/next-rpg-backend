@@ -1,0 +1,110 @@
+{
+  "info": {
+    "name": "RPG Combat API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000/api" },
+    { "key": "combatId", "value": "" },
+    { "key": "turnId", "value": "" },
+    { "key": "rollId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Start Combat",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": {
+          "raw": "{{baseUrl}}/combat/control",
+          "host": ["{{baseUrl}}"],
+          "path": ["combat", "control"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"startCombat\",\n  \"participantIds\": [\"CHAR_GUERREIRO\", \"CHAR_GOBLIN\"]\n}"
+        }
+      }
+    },
+    {
+      "name": "Start Turn",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": {
+          "raw": "{{baseUrl}}/combat/control",
+          "host": ["{{baseUrl}}"],
+          "path": ["combat", "control"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"startTurn\",\n  \"combatId\": \"{{combatId}}\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Attack Roll",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": {
+          "raw": "{{baseUrl}}/roll",
+          "host": ["{{baseUrl}}"],
+          "path": ["roll"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"characterId\": \"CHAR_GUERREIRO\",\n  \"actionPresetId\": \"PRESET_ATAQUE_GUERREIRO\",\n  \"targetIds\": [\"CHAR_GOBLIN\"],\n  \"combatId\": \"{{combatId}}\",\n  \"turnId\": \"{{turnId}}\"\n}"
+        }
+      }
+    },
+    {
+      "name": "React - Dodge",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": {
+          "raw": "{{baseUrl}}/roll/react",
+          "host": ["{{baseUrl}}"],
+          "path": ["roll", "react"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"rollId\": \"{{rollId}}\",\n  \"reactionType\": \"DODGE\",\n  \"characterId\": \"CHAR_GOBLIN\"\n}"
+        }
+      }
+    },
+    {
+      "name": "End Turn",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": {
+          "raw": "{{baseUrl}}/combat/control",
+          "host": ["{{baseUrl}}"],
+          "path": ["combat", "control"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"endTurn\",\n  \"combatId\": \"{{combatId}}\"\n}"
+        }
+      }
+    },
+    {
+      "name": "End Combat",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": {
+          "raw": "{{baseUrl}}/combat/control",
+          "host": ["{{baseUrl}}"],
+          "path": ["combat", "control"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"endCombat\",\n  \"combatId\": \"{{combatId}}\"\n}"
+        }
+      }
+    }
+  ]
+}

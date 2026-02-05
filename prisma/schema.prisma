@@ -19,6 +19,7 @@ enum Role {
 enum ActionType {
   ATTACK
   TEST
+  REACT
   SPELL
   HEAL
   BUFF
@@ -51,6 +52,7 @@ enum LogType {
   TURN_START
   TURN_END
   MANUAL_OVERRIDE
+  REACTION
 }
 
 enum StatusType {
@@ -104,6 +106,9 @@ model Character {
   dodgePresetId String?       @db.ObjectId
   dodgePreset   ActionPreset? @relation("DodgePreset", fields: [dodgePresetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  blockPresetId String?       @db.ObjectId
+  blockPreset   ActionPreset? @relation("BlockPreset", fields: [blockPresetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
   counterAttackPresetId String?       @db.ObjectId
   counterAttackPreset   ActionPreset? @relation("CounterAttackPreset", fields: [counterAttackPresetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
@@ -137,8 +142,9 @@ model ActionPreset {
   type       ActionType
   targetType TargetType
 
-  diceFormula String
-  modifier    Int    @default(0)
+  diceFormula   String // rolagem de ataque / teste
+  impactFormula String? // rolagem de dano OU cura
+  modifier      Int     @default(0)
 
   critThreshold  Int?
   critMultiplier Float?
@@ -149,8 +155,7 @@ model ActionPreset {
 
   attribute AttributeType
 
-  // NOVOS CAMPOS
-  durationTurns Int? // duração de buffs/debuffs
+  durationTurns Int?
   statAffected  AttributeType?
   effectAmount  Int?
   statusApplied StatusType?
@@ -159,6 +164,7 @@ model ActionPreset {
   character   Character @relation("CharacterPresets", fields: [characterId], references: [id])
 
   dodgeCharacters         Character[] @relation("DodgePreset")
+  blockCharacters         Character[] @relation("BlockPreset")
   counterAttackCharacters Character[] @relation("CounterAttackPreset")
 
   rolls            RollResult[]
@@ -200,7 +206,7 @@ model RollResult {
 
   // Reações
   pendingReaction Boolean @default(false)
-  reactionType    String? // "DODGE" | "COUNTER_ATTACK"
+  reactionType    String?
   reacted         Boolean @default(false)
 
   createdAt DateTime @default(now())
@@ -320,7 +326,9 @@ model CharacterEffect {
   preset   ActionPreset @relation(fields: [presetId], references: [id])
 
   remainingTurns Int
-  appliedAt      DateTime   @default(now())
+  appliedAt      DateTime       @default(now())
   type           EffectType
   value          Int
+  statAffected   AttributeType?
+  statusApplied  StatusType?
 }
