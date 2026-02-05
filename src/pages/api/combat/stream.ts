@@ -1,46 +1,65 @@
-import type { NextApiResponse, NextApiRequest } from "next";
-import jwt from "jsonwebtoken";
-import { AuthUser } from "../../../lib/auth";
-import { addClient, removeClient } from "../../../lib/sse";
-import { prisma } from "../../../lib/prisma";
+import type { NextApiRequest, NextApiResponse } from "next";
+import { PrismaClient, RollResult } from "@prisma/client";
+
+const prisma = new PrismaClient();
+let clients: NextApiResponse[] = [];
+
+const ROOM_TOKEN = "Quarentena";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== "GET") {
-    res.status(405).end();
-    return;
-  }
+  if (req.method !== "GET") return res.status(405).end();
 
-  try {
-    const token = req.query.token as string;
-    if (!token) return res.status(401).json({ message: "Token ausente" });
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
 
-    const secret = process.env.JWT_SECRET!;
-    const decoded = jwt.verify(token, secret) as AuthUser;
+  clients.push(res);
+  console.log(`[SSE] Novo cliente conectado. Total: ${clients.length}`);
 
-    res.writeHead(200, {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-    });
+  req.on("close", () => {
+    clients = clients.filter((c) => c !== res);
+    console.log(`[SSE] Cliente desconectado. Total: ${clients.length}`);
+  });
 
-    const client = {
-      res,
-      userId: decoded.userId,
-    };
+  const interval = setInterval(async () => {
+    if (clients.includes(res)) {
+      const combat = await prisma.combat.findFirst({
+        orderBy: { createdAt: "desc" },
+        include: {
+          participants: {
+            include: {
+              character: {
+                include: {
+                  presets: true,
+                  statusEffects: true,
+                },
+              },
+            },
+          },
+          turns: true,
+          logs: { include: { roll: { include: { character: true, preset: true } }, character: true, target: true } },
+          rollResults: {
+            include: { character: true },
+          },
+        },
+      });
+      if (combat) {
+        const rollResultsWithTargets = combat.rollResults.map((roll: RollResult) => {
+          const targets = roll.targetIds.map((tid: string) => {
+            return combat.participants.find((p: any) => p.character.id === tid)?.character || null;/* eslint-disable  @typescript-eslint/no-explicit-any */
+          });
+          return {
+            ...roll,
+            targets,
+          };
+        });
+        res.write(`data: ${JSON.stringify({
+          ...combat,
+          rollResults: rollResultsWithTargets,
+        })}\n\n`);
+      }
+    }
+  }, 8000);
 
-    addClient(client);
-
-    req.on("close", () => {
-      removeClient(client);
-    });
-
-    const characters = await prisma.character.findMany({
-      include: { owner: { select: { id: true, username: true } } },
-    });
-
-    res.write(`data: ${JSON.stringify({ roomToken: "Quarentena", characters })}\n\n`);
-  } catch (err) {
-    console.error(err);
-    res.status(401).end();
-  }
+  req.on("close", () => clearInterval(interval));
 }

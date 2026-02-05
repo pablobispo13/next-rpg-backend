@@ -2,7 +2,6 @@ import type { NextApiResponse } from "next";
 import { LogType } from "@prisma/client";
 import { authenticate, AuthenticatedRequest } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
-import { notifyClients } from "../../../lib/sse";
 import { rollDice } from "../../../lib/dice";
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
@@ -74,8 +73,6 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                     rollResults: true,
                 }
             });
-
-            await notifyClients();
             res.status(201).json({ combat: combatFull, order: participantsWithInitiative });
             return;
         }
@@ -163,8 +160,6 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                     logs: true,
                 }
             });
-
-            await notifyClients();
             res.status(201).json(turnFull);
             return;
         }
@@ -200,7 +195,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 where: { id: turn.id },
                 data: { endedAt: new Date() },
             });
-            await notifyClients();
+            // await notifyClients();
             res.status(200).json({ message: "Turno finalizado", nextTurnIndex: nextIndex, round: nextRound });
             return;
         }
@@ -210,8 +205,6 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
             await prisma.combat.update({ where: { id: combatId }, data: { active: false } });
             await prisma.actionLog.create({ data: { type: LogType.COMBAT_END, message: "Combate finalizado", combatId } });
-
-            await notifyClients();
             res.status(200).json({ message: "Combate encerrado" });
             return;
         }

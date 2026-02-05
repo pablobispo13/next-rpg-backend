@@ -51,58 +51,43 @@ export function CombatProvider({
     ========================= */
 
     const pendingUpdateRef = useRef<NodeJS.Timeout | null>(null);
-    const token =
-        typeof window !== "undefined" ? localStorage.getItem("token") : null;
-    const fetchCharacters = useCallback(async () => {
-        if (!token) return;
-        try {
-            const res = await api.get("/characters", {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            // setCharacters(res.data.characters);
-            console.log(res.data.characters)
-            // if (res.data.roomToken) setRoomToken(res.data.roomToken);
-        } catch (err) {
-            console.error(err);
-        }
-    }, [token]);
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
     useEffect(() => {
         if (!token) return;
+        if (combatId) {
 
-        fetchCharacters();
-        const es = new EventSource("/api/stream");
+            // loadCombat()
+            const es = new EventSource("/api/combat/stream");
 
-        es.onmessage = (event) => {
-            const data = JSON.parse(event.data) as {
-                characters: Character[];
-                roomToken: string;
+            es.onmessage = (event) => {
+                const data = JSON.parse(event.data) as {
+                    characters: Character[];
+                    roomToken: string;
+                };
+
+                if (pendingUpdateRef.current) clearTimeout(pendingUpdateRef.current);
+
+                pendingUpdateRef.current = setTimeout(() => {
+                    setCombat(data);
+                }, 100);
             };
 
-            if (pendingUpdateRef.current) clearTimeout(pendingUpdateRef.current);
+            es.onerror = () => {
+                es.close();
+                setTimeout(() => {
+                    if (typeof window !== "undefined") {
+                        new EventSource("/api/combat/stream");
+                    }
+                }, 5000);
+            };
 
-            pendingUpdateRef.current = setTimeout(() => {
-                // setRoomToken(data.roomToken);
-                // sempre use os dados do servidor, evita o "pulo" do personagem
-                // setCharacters(data.characters);
-                console.log(data.characters)
-            }, 100);
-        };
-
-        es.onerror = () => {
-            es.close();
-            setTimeout(() => {
-                if (typeof window !== "undefined") {
-                    new EventSource("/api/stream");
-                }
-            }, 5000);
-        };
-
-        return () => {
-            es.close();
-            if (pendingUpdateRef.current) clearTimeout(pendingUpdateRef.current);
-        };
-    }, [token, fetchCharacters]);
+            return () => {
+                es.close();
+                if (pendingUpdateRef.current) clearTimeout(pendingUpdateRef.current);
+            };
+        }
+    }, [token]);
 
 
 

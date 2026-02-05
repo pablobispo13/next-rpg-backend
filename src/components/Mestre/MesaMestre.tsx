@@ -45,27 +45,8 @@ export default function MesaMestre() {
   // SSE de personagens
   useEffect(() => {
     if (!token) return;
-
     fetchCharacters();
-
-    const es = new EventSource(`/api/stream?token=${token}`);
-
-    es.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (pendingUpdateRef.current) clearTimeout(pendingUpdateRef.current);
-
-      pendingUpdateRef.current = setTimeout(() => {
-        setCharacters(data.characters);
-      }, 100);
-    };
-
-    es.onerror = () => es.close();
-
-    return () => {
-      es.close();
-      if (pendingUpdateRef.current) clearTimeout(pendingUpdateRef.current);
-    };
-  }, [fetchCharacters, token]);
+  }, [token]);
 
   const players = characters.filter((c) => c.owner?.role === "JOGADOR");
   const enemies = characters.filter((c) => c.owner?.role === "MESTRE");

@@ -2,7 +2,6 @@ import type { NextApiResponse } from "next";
 import { prisma } from "../../../lib/prisma";
 import { authenticate, AuthenticatedRequest } from "../../../lib/auth";
 import { rollDice } from "../../../lib/dice";
-import { notifyClients } from "../../../lib/sse";
 import { LogType } from "@prisma/client";
 import { getAttributeValue } from "../../../lib/attributes";
 
@@ -174,8 +173,6 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             turnId,
         },
     });
-    if (attackRoll.combatId)
-        await notifyClients(attackRoll.combatId);
     return res.status(200).json({ success });
 }
 
