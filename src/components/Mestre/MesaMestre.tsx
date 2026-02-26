@@ -144,7 +144,6 @@ export default function MesaMestre() {
                     key={char.id}
                     character={char}
                     onAcess={() => {
-                      console.log(char)
                       window.open(
                         `/protected?view=jogador&characterId=${char.id}`,
                         "_blank",

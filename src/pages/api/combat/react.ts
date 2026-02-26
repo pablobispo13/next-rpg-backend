@@ -87,11 +87,11 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
        ROLL DA REAÇÃO
     ========================= */
     const reactionRollData = rollDice(preset.diceFormula);
-
+    console.log("Dado puro", reactionRollData.total)
     const attributeValue = getAttributeValue(target, preset.attribute);
     const reactionModifier = attributeValue + (preset.modifier ?? 0);
     const reactionTotal = reactionRollData.total + reactionModifier;
-
+    console.log("Dado com atributo", reactionTotal)
     let reactionSuccess = false;
     let finalMessage = "";
 
@@ -100,21 +100,27 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     ========================= */
 
     if (reactionType === "COUNTER_ATTACK") {
-
+        console.log("Dado do ataque", attackRoll.total)
         reactionSuccess = reactionRollData.total >= attackRoll.total;
 
         if (reactionSuccess) {
             // Contra-ataque vence
+            if (!preset.impactFormula) {
+                return res.status(400).json({ message: "Contra-ataque sem impactFormula configurado" });
+            }
+            const impactRoll = rollDice(preset.impactFormula);
+            const counterDamage = impactRoll.total;
+              console.log("Dado do contra-ataque", impactRoll.total)
             await prisma.character.update({
                 where: { id: attacker.id },
                 data: {
                     life: {
-                        decrement: reactionTotal,
+                        decrement: counterDamage,
                     },
                 },
             });
 
-            finalMessage = `${target.name} contra-atacou com sucesso (${reactionTotal} vs ${attackRoll.total}) e causou ${reactionTotal} de dano em ${attacker.name}`;
+            finalMessage = `${target.name} contra-atacou com sucesso (${reactionRollData.total} vs ${attackRoll.total}) e causou ${counterDamage} de dano em ${attacker.name}`;
         } else {
             // Ataque original vence
             await prisma.character.update({

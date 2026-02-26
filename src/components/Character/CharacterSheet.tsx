@@ -214,7 +214,7 @@ export function CharacterSheet({
                     <Stack display={"flex"} flexDirection={"row"} alignItems={"center"}>
                       <>
                         <strong>{preset.name}</strong> —{" "}
-                        {preset.diceFormula}/* eslint-disable  @typescript-eslint/no-explicit-any */
+                        {preset.diceFormula}  {/* eslint-disable  @typescript-eslint/no-explicit-any */}
                         {(character as any)[preset.attribute.toLowerCase()] > 0 ? " + " + (character as any)[preset.attribute.toLowerCase()] + " (" + preset.attribute + ")"/* eslint-disable  @typescript-eslint/no-explicit-any */
                           : undefined}{preset.modifier ? " + " + preset.modifier : undefined}
                       </>
@@ -230,9 +230,9 @@ export function CharacterSheet({
           </Section>
 
           {/* Status */}
-          {character.statusEffects.length > 0 && <Section title="Efeitos Ativos">
+          {/* {character.statusEffects.length > 0 && <Section title="Efeitos Ativos">
             <StatusEffectChips effects={character.statusEffects} />
-          </Section>}
+          </Section>} */}
 
           {/* Rolagens */}
           <Section title="Rolagens Recentes">

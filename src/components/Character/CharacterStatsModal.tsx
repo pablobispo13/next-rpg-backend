@@ -81,7 +81,21 @@ export function CharacterStatsModal({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={() => {
+      setForm({
+        name: "",
+        life: 0,
+        maxLife: 0,
+        xp: 0,
+        baseDefense: 0,
+        strength: 0,
+        agility: 0,
+        vigor: 0,
+        intellect: 0,
+        presence: 0,
+      })
+      onClose()
+    }} maxWidth="sm" fullWidth>
       <DialogTitle>Editar Dados do Personagem</DialogTitle>
 
       <DialogContent>
@@ -136,7 +150,21 @@ export function CharacterStatsModal({
       </DialogContent>
 
       <DialogActions>
-        <Button onClick={onClose} color="inherit">Cancelar</Button>
+        <Button onClick={() => {
+          setForm({
+            name: "",
+            life: 0,
+            maxLife: 0,
+            xp: 0,
+            baseDefense: 0,
+            strength: 0,
+            agility: 0,
+            vigor: 0,
+            intellect: 0,
+            presence: 0,
+          })
+          onClose()
+        }} color="inherit">Cancelar</Button>
         <Button variant="contained" onClick={handleSave}>Salvar</Button>
       </DialogActions>
     </Dialog>

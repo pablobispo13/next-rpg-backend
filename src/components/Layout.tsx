@@ -21,7 +21,7 @@ export default function Layout({ children }: LayoutProps) {
             RPG
           </Button>
           <ButtonTheme />
-          {user && <Button color="inherit" onClick={() => logout}>Logout</Button>}
+          {user && <Button color="inherit" onClick={() => logout("manual")}>Logout</Button>}
         </Toolbar>
       </AppBar>
       <main className="flex-1 p-4">{children}</main>

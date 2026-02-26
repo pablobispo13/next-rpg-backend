@@ -36,7 +36,7 @@ export function PresetModal({
         type: "ATTACK",
         targetType: "ENEMY",
         attribute: "STRENGTH",
-        diceFormula: "",
+        diceFormula: "1d20",
         impactFormula: "",
         modifier: 0,
         critThreshold: 20,
@@ -110,7 +110,28 @@ export function PresetModal({
     };
 
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+        <Dialog open={open} onClose={() => {
+            setForm({
+                name: "",
+                description: "",
+                type: "ATTACK",
+                targetType: "ENEMY",
+                attribute: "STRENGTH",
+                diceFormula: "1d20",
+                impactFormula: "",
+                modifier: 0,
+                critThreshold: 20,
+                critMultiplier: 2,
+                requiresTurn: true,
+                allowOutOfCombat: false,
+                appliesEffect: false,
+                durationTurns: "",
+                statAffected: "",
+                effectAmount: "",
+                statusApplied: "",
+            })
+            onClose()
+        }} maxWidth="md" fullWidth>
             <DialogTitle>
                 {preset ? "Editar Preset" : "Novo Preset"}
             </DialogTitle>
@@ -138,7 +159,7 @@ export function PresetModal({
                     </Stack>
 
                     <Stack direction="row" spacing={2}>
-                        <TextField label="Fórmula de Dado" value={form.diceFormula} onChange={e => update("diceFormula", e.target.value)} fullWidth />
+                        <TextField label="Fórmula de Dado" disabled value={form.diceFormula} onChange={e => update("diceFormula", e.target.value)} fullWidth />
                         {form.type === "REACT" || form.type === "ATTACK" || form.type === "SUPPORT" ?
                             <TextField label="Fórmula da ação" value={form.impactFormula} onChange={e => update("impactFormula", e.target.value)} fullWidth />
                             : undefined}
@@ -164,9 +185,9 @@ export function PresetModal({
                     {/* Regras */}
                     <FormControlLabel control={<Switch checked={form.requiresTurn} onChange={e => update("requiresTurn", e.target.checked)} />} label="Consome turno" />
                     <FormControlLabel control={<Switch checked={form.allowOutOfCombat} onChange={e => update("allowOutOfCombat", e.target.checked)} />} label="Pode usar fora de combate" />
-                    <FormControlLabel control={<Switch checked={form.appliesEffect} onChange={e => update("appliesEffect", e.target.checked)} />} label="Aplica efeito" />
+                    {/* <FormControlLabel control={<Switch checked={form.appliesEffect} onChange={e => update("appliesEffect", e.target.checked)} />} label="Aplica efeito" /> */}
 
-                    {/* Efeitos */}
+                    {/* Efeitos
                     {form.appliesEffect && (
                         <>
                             <Divider />
@@ -178,12 +199,33 @@ export function PresetModal({
 
                             <TextField label="Status Aplicado (ex: QUEIMANDO)" value={form.statusApplied} onChange={e => update("statusApplied", e.target.value)} />
                         </>
-                    )}
+                    )} */}
                 </Stack>
             </DialogContent>
 
             <DialogActions>
-                <Button onClick={onClose} color="inherit">Cancelar</Button>
+                <Button onClick={() => {
+                    setForm({
+                        name: "",
+                        description: "",
+                        type: "ATTACK",
+                        targetType: "ENEMY",
+                        attribute: "STRENGTH",
+                        diceFormula: "1d20",
+                        impactFormula: "",
+                        modifier: 0,
+                        critThreshold: 20,
+                        critMultiplier: 2,
+                        requiresTurn: true,
+                        allowOutOfCombat: false,
+                        appliesEffect: false,
+                        durationTurns: "",
+                        statAffected: "",
+                        effectAmount: "",
+                        statusApplied: "",
+                    })
+                    onClose()
+                }} color="inherit">Cancelar</Button>
                 <Button variant="contained" onClick={handleSave}>Salvar</Button>
             </DialogActions>
         </Dialog>
