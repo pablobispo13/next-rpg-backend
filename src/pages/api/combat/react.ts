@@ -50,10 +50,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
     const damage = attackRoll.damage ?? 0;
 
-    let success = false;
-    let reactionTotal = 0;
     let reactionPresetId: string;
-    let reactionModifier = 0;
 
     /* =========================
        DEFINE PRESET DA REAÇÃO
@@ -89,34 +86,66 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     /* =========================
        ROLL DA REAÇÃO
     ========================= */
-    const reactionRollData: ReturnType<typeof rollDice> = rollDice(preset.diceFormula);
+    const reactionRollData = rollDice(preset.diceFormula);
 
     const attributeValue = getAttributeValue(target, preset.attribute);
-    reactionModifier = attributeValue + (preset.modifier ?? 0);
-    reactionTotal = reactionRollData.total + reactionModifier;
+    const reactionModifier = attributeValue + (preset.modifier ?? 0);
+    const reactionTotal = reactionRollData.total + reactionModifier;
+
+    let reactionSuccess = false;
+    let finalMessage = "";
 
     /* =========================
-       RESOLVE EFEITOS
+       RESOLUÇÃO
     ========================= */
+
     if (reactionType === "COUNTER_ATTACK") {
-        success = true;
 
-        await prisma.character.update({
-            where: { id: attacker.id },
-            data: {
-                life: Math.max(attacker.life - reactionTotal, 0),
-            },
-        });
-    } else {
-        success = reactionTotal >= attackRoll.total;
+        reactionSuccess = reactionRollData.total >= attackRoll.total;
 
-        if (!success) {
+        if (reactionSuccess) {
+            // Contra-ataque vence
+            await prisma.character.update({
+                where: { id: attacker.id },
+                data: {
+                    life: {
+                        decrement: reactionTotal,
+                    },
+                },
+            });
+
+            finalMessage = `${target.name} contra-atacou com sucesso (${reactionTotal} vs ${attackRoll.total}) e causou ${reactionTotal} de dano em ${attacker.name}`;
+        } else {
+            // Ataque original vence
             await prisma.character.update({
                 where: { id: target.id },
                 data: {
-                    life: Math.max(target.life - damage, 0),
+                    life: {
+                        decrement: damage,
+                    },
                 },
             });
+
+            finalMessage = `${target.name} falhou no contra-ataque (${reactionTotal} vs ${attackRoll.total}) e sofreu ${damage} de dano`;
+        }
+
+    } else {
+
+        reactionSuccess = reactionTotal >= attackRoll.total;
+
+        if (!reactionSuccess) {
+            await prisma.character.update({
+                where: { id: target.id },
+                data: {
+                    life: {
+                        decrement: damage,
+                    },
+                },
+            });
+
+            finalMessage = `${target.name} falhou ao tentar ${reactionType} (${reactionTotal} vs ${attackRoll.total}) e sofreu ${damage} de dano`;
+        } else {
+            finalMessage = `${target.name} teve sucesso ao tentar ${reactionType} (${reactionTotal} vs ${attackRoll.total}) e evitou o dano`;
         }
     }
 
@@ -130,13 +159,11 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             combatId: attackRoll.combatId,
             turnId,
             targetIds: [attacker.id],
-
             diceRolled: preset.diceFormula,
             rolls: reactionRollData.rolls,
             modifier: reactionModifier,
             total: reactionTotal,
-
-            success,
+            success: reactionSuccess,
             critical: false,
         },
     });
@@ -149,23 +176,16 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         data: {
             reacted: true,
             pendingReaction: false,
-            reactionType,
-            success,
         },
     });
 
     /* =========================
        LOG
     ========================= */
-    const logMessage =
-        `${target.name} tentou ${reactionType} ` +
-        `(${reactionTotal} vs ${attackRoll.total}) → ` +
-        `${success ? "SUCESSO" : "FALHOU"}`;
-
     await prisma.actionLog.create({
         data: {
             type: LogType.REACTION,
-            message: logMessage,
+            message: finalMessage,
             characterId: target.id,
             targetId: attacker.id,
             rollId: reactionRoll.id,
@@ -173,7 +193,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             turnId,
         },
     });
-    return res.status(200).json({ success });
+
+    return res.status(200).json({ success: reactionSuccess });
 }
 
 export default authenticate(handler);

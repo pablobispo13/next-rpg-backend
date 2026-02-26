@@ -45,6 +45,8 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
     endTurn,
     pendingReactionRoll,
     resolveReaction,
+    refreshCombat,
+    nextRefreshIn,
   } = useCombat();
 
   if (!combat || !combat.participants?.length) return <>Carregando combate...</>;
@@ -56,13 +58,17 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
   const activeParticipant = ordered[combat.currentTurnIndex];
   const activeCharacter = activeParticipant.character;
 
-  const canAct = isMyTurn && !pendingReactionRoll;
-  const canUseActions = canAct && !actionUsed;
-  const canEndTurn =
-    canAct &&
-    actionUsed &&
+  const canAct =
+    isMyTurn &&
     !pendingReactionRoll &&
-    !endingTurn;
+    !actionUsed;
+
+  const canUseActions = canAct;
+
+  const canEndTurn =
+    isMyTurn &&
+    actionUsed &&
+    !pendingReactionRoll;
 
 
   const router = useRouter();
@@ -80,7 +86,19 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
       {/* HEADER */}
       <Box p={2} borderBottom="1px solid #333">
         <Stack direction="row" overflow="hidden" justifyContent="space-between">
-          <Typography variant="h6">Round {combat.round}</Typography>
+          <Typography variant="h6">Round {combat.round}
+            <Stack direction="row" spacing={2} alignItems="center">
+              <Typography fontSize={12} color="#aaa">
+                Atualiza em {nextRefreshIn}s
+              </Typography>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={refreshCombat}
+              >
+                Atualizar agora
+              </Button>
+            </Stack></Typography>
           {isMaster && (
             <Button
               color="error"
@@ -100,8 +118,8 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
         </Stack>
       </Box>
 
-      <Stack direction="row" height="calc(100% - 160px)">
-        {/* TURNOS */}
+      {/* TURNOS */}
+      <Stack direction="row" height="calc(100% - 20%)">
         <Box
           width={260}
           p={2}
@@ -189,16 +207,11 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
 
         {/* LOG */}
         <Box
-          width={320}
           p={2}
           borderLeft="1px solid #333"
           display="flex"
           flexDirection="column"
         >
-          <Typography variant="h6" mb={1}>
-            Log
-          </Typography>
-
           <Box flex={1} overflow="auto">
             <CombatTimeline logs={combat.logs} />
           </Box>
@@ -212,7 +225,7 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
         <Stack spacing={1}>
           <Typography color="#aaa" fontSize={14}>
             {pendingReactionRoll
-              ? `${activeCharacter.name} aguarda uma reação…`
+              ? `Você está sendo atacado por ${pendingReactionRoll.attackerName}`
               : `${activeCharacter.name} está avaliando o próximo movimento`}
             {actionUsed && (
               <Typography fontSize={12} color="#ef5350">
@@ -280,7 +293,7 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
       </Box>
 
       {/* MODAL DE REAÇÃO */}
-      <Dialog open={!!pendingReactionRoll}>
+      <Dialog open={Boolean(pendingReactionRoll)}>
         <DialogTitle sx={{ color: "#ffb74d" }}>
           ⚠️ {pendingReactionRoll?.attackerName} atacou você!
         </DialogTitle>

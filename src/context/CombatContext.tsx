@@ -3,7 +3,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useAuth } from "./AuthContext";
 import api from "../lib/api";
-import { Character } from "@prisma/client";
 
 export type CombatContextType = {
     combat: any | null;
@@ -27,6 +26,8 @@ export type CombatContextType = {
         rollId: string,
         reactionType: "DODGE" | "COUNTER_ATTACK" | "BLOCK"
     ) => Promise<void>;
+    refreshCombat: () => Promise<void>;
+    nextRefreshIn: number;
 };
 
 const CombatContext = createContext<CombatContextType>({} as any);
@@ -43,6 +44,7 @@ export function CombatProvider({
 
     const [combat, setCombat] = useState<any | null>(null);
     const [actionUsed, setActionUsed] = useState(false);
+    const optimisticActionRef = useRef(false);
     const [selectedTargets, setSelectedTargets] = useState<string[]>([]);
     const [pendingReactionRoll, setPendingReactionRoll] = useState<any | null>(null);
 
@@ -52,44 +54,97 @@ export function CombatProvider({
 
     const pendingUpdateRef = useRef<NodeJS.Timeout | null>(null);
     const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    function extractPendingReaction(
+        combatData: any,
+        userId?: string
+    ) {
+        if (!combatData || !userId) return null;
+
+        const ordered = [...(combatData.participants || [])].sort(
+            (a: any, b: any) => a.turnOrder - b.turnOrder
+        );
+
+        const myCharacterIds = ordered
+            .filter((p: any) => p.character.ownerId === userId)
+            .map((p: any) => p.character.id);
+
+        const pendingRoll = combatData.rollResults?.find((r: any) => {
+            if (r.pendingReaction !== true) return false;
+            if (r.reacted === true) return false;
+
+            return r.targetIds?.some((tid: string) =>
+                myCharacterIds.includes(tid)
+            );
+        });
+
+        if (!pendingRoll) return null;
+
+        const pendingTargets = pendingRoll.targetIds
+            .map((tid: string) => {
+                const p = ordered.find((o: any) => o.character.id === tid);
+                return p?.character;
+            })
+            .filter(Boolean);
+
+        const attackerParticipant = ordered.find(
+            (o: any) => o.character.id === pendingRoll.characterId
+        );
+
+        return {
+            ...pendingRoll,
+            attackerName: attackerParticipant?.character?.name ?? "Alguém",
+            pendingReactionTargets: pendingTargets,
+        };
+    }
 
     useEffect(() => {
-        if (!token) return;
-        if (combatId) {
-
-            // loadCombat()
-            const es = new EventSource("/api/combat/stream");
-
-            es.onmessage = (event) => {
-                const data = JSON.parse(event.data) as {
-                    characters: Character[];
-                    roomToken: string;
-                };
-
-                if (pendingUpdateRef.current) clearTimeout(pendingUpdateRef.current);
-
-                pendingUpdateRef.current = setTimeout(() => {
-                    setCombat(data);
-                }, 100);
-            };
-
-            es.onerror = () => {
-                es.close();
-                setTimeout(() => {
-                    if (typeof window !== "undefined") {
-                        new EventSource("/api/combat/stream");
-                    }
-                }, 5000);
-            };
-
-            return () => {
-                es.close();
-                if (pendingUpdateRef.current) clearTimeout(pendingUpdateRef.current);
-            };
+        if (!combat || !user?.id) {
+            setPendingReactionRoll(null);
+            return;
         }
-    }, [token]);
 
+        const nextPending = extractPendingReaction(combat, user.id);
 
+        setPendingReactionRoll((prev: any) => {
+            if (prev?.id === nextPending?.id) return prev;
+            return nextPending;
+        });
+    }, [combat, user?.id]);
+
+    const REFRESH_INTERVAL = 10000;
+
+    const intervalRef = useRef<NodeJS.Timeout | null>(null);
+    const countdownRef = useRef<NodeJS.Timeout | null>(null);
+
+    const [nextRefreshIn, setNextRefreshIn] = useState(REFRESH_INTERVAL / 1000);
+
+    const refreshCombat = useCallback(async () => {
+        if (!combatId) return;
+
+        await loadCombat(combatId);
+        setNextRefreshIn(REFRESH_INTERVAL / 1000);
+    }, [combatId]);
+    useEffect(() => {
+        if (!combatId) return;
+
+        refreshCombat(); // carrega imediatamente
+
+        intervalRef.current = setInterval(() => {
+            refreshCombat();
+        }, REFRESH_INTERVAL);
+
+        countdownRef.current = setInterval(() => {
+            setNextRefreshIn(prev => {
+                if (prev <= 1) return REFRESH_INTERVAL / 1000;
+                return prev - 1;
+            });
+        }, 1000);
+
+        return () => {
+            if (intervalRef.current) clearInterval(intervalRef.current);
+            if (countdownRef.current) clearInterval(countdownRef.current);
+        };
+    }, [combatId, refreshCombat]);
 
     async function loadCombat(id = combatId) {
         if (!id) return;
@@ -98,59 +153,6 @@ export function CombatProvider({
             const res = await api.get(`/combat/${id}`);
             const data = res.data;
             setCombat(data);
-
-            const ordered = [...(data.participants || [])].sort(
-                (a: any, b: any) => a.turnOrder - b.turnOrder
-            );
-
-            const activeParticipant = ordered[data.currentTurnIndex];
-            const activeCharacter = activeParticipant?.character;
-
-            const activeTurn = data.turns?.find(
-                (t: any) =>
-                    t.characterId === activeCharacter?.id &&
-                    !t.endedAt
-            );
-
-            /* ✅ actionUsed SOMENTE para quem está no turno */
-            if (activeTurn?.characterId === activeCharacter?.id) {
-                setActionUsed(Boolean(activeTurn?.hasUsedMainAction));
-            } else {
-                setActionUsed(false);
-            }
-
-            /* =========================
-               Reação pendente (alvos)
-            ========================= */
-
-            const myCharacterIds = ordered
-                .filter((p: any) => p.character.ownerId === user?.id)
-                .map((p: any) => p.character.id);
-
-            const pendingRoll = data.rollResults?.find((r: any) => {
-                if (!r.pendingReaction || r.reacted) return false;
-                return r.targetIds.some((tid: string) =>
-                    myCharacterIds.includes(tid)
-                );
-            });
-
-            if (pendingRoll) {
-                const pendingTargets = pendingRoll.targetIds
-                    .map((tid: string) => {
-                        const p = ordered.find(
-                            (o: any) => o.character.id === tid
-                        );
-                        return p?.character;
-                    })
-                    .filter(Boolean);
-
-                setPendingReactionRoll({
-                    ...pendingRoll,
-                    pendingReactionTargets: pendingTargets,
-                });
-            } else {
-                setPendingReactionRoll(null);
-            }
         } catch (err) {
             console.error("Erro ao carregar combate", err);
         }
@@ -178,6 +180,13 @@ export function CombatProvider({
             t.characterId === activeCharacter?.id &&
             !t.endedAt
     );
+    useEffect(() => {
+        if (!activeTurn) {
+            optimisticActionRef.current = false;
+            setActionUsed(false);
+            setSelectedTargets([]);
+        }
+    }, [activeTurn?.id]);
 
     const controlledCharacterIds =
         ordered
@@ -197,7 +206,9 @@ export function CombatProvider({
     ========================= */
 
     function selectTarget(id: string) {
-        if (!isMyTurn || actionUsed || pendingReactionRoll) return;
+        if (!isMyTurn) return;
+        if (actionUsed) return;
+        if (pendingReactionRoll) return;
 
         setSelectedTargets((prev) =>
             prev.includes(id)
@@ -219,9 +230,15 @@ export function CombatProvider({
         targetIds: string[];
         characterId: string;
     }) {
-        if (!combat || actionUsed || pendingReactionRoll) return;
+        if (!combat) return;
+        if (!isMyTurn) return;
+        if (actionUsed || optimisticActionRef.current) return;
+        if (pendingReactionRoll) return;
 
         try {
+            optimisticActionRef.current = true;
+            setActionUsed(true); // 🔒 trava UI imediatamente
+
             await api.post("/roll", {
                 actionPresetId: presetId,
                 combatId: combat.id,
@@ -233,9 +250,13 @@ export function CombatProvider({
             setSelectedTargets([]);
             await loadCombat();
         } catch (err) {
+            optimisticActionRef.current = false;
+            setActionUsed(false);
             console.error("Erro ao usar ação", err);
         }
     }
+
+
 
     async function startCombat(participantIds: string[]) {
         try {
@@ -266,22 +287,29 @@ export function CombatProvider({
             console.error("Erro ao iniciar turno", err);
         }
     }
+    const activeTurnIdRef = useRef<string | null>(null);
+
+    useEffect(() => {
+        if (activeTurn?.id) {
+            activeTurnIdRef.current = activeTurn.id;
+        }
+    }, [activeTurn?.id]);
 
     async function endTurn() {
-        if (!combat || !isMyTurn || pendingReactionRoll) return;
-
-        if (!actionUsed) {
-            alert("Use uma ação principal antes de passar o turno.");
-            return;
-        }
+        if (!combat || !isMyTurn) return;
+        if (pendingReactionRoll) return;
+        if (!actionUsed) return;
 
         try {
             await api.post("/combat/control", {
                 action: "endTurn",
                 combatId: combat.id,
-                turnId: activeTurn?.id,
+                turnId: activeTurnIdRef.current,
             });
 
+            optimisticActionRef.current = false;
+            setActionUsed(false);
+            setSelectedTargets([]);
             await loadCombat();
         } catch (err) {
             console.error("Erro ao finalizar turno", err);
@@ -296,6 +324,7 @@ export function CombatProvider({
 
         try {
             const targets = pendingReactionRoll.pendingReactionTargets;
+
             const reactingCharacter =
                 targets.find((t: any) => t.ownerId === user?.id) ??
                 targets[0];
@@ -307,8 +336,7 @@ export function CombatProvider({
                 turnId: pendingReactionRoll.turnId,
             });
 
-            setPendingReactionRoll(null);
-            await loadCombat();
+            await loadCombat(); // 🔥 backend decide tudo
         } catch (err) {
             console.error("Erro ao reagir", err);
         }
@@ -330,6 +358,8 @@ export function CombatProvider({
                 startTurn,
                 endTurn,
                 resolveReaction,
+                refreshCombat,
+                nextRefreshIn,
             }}
         >
             {children}

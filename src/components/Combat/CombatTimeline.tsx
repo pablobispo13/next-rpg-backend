@@ -8,43 +8,28 @@ import {
     ToggleButton,
     ToggleButtonGroup,
 } from "@mui/material";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 /* =========================
-   TIMELINE BUILD
+   TYPES
 ========================= */
+
 export type CombatTimelineProps = {
     logs: CombatLog[];
-
-    /**
-     * Altura fixa do painel (opcional).
-     * Ex: 360, "100%", "calc(100vh - 120px)"
-     */
-    height?: number | string;
-
-    /**
-     * Largura fixa do painel (opcional).
-     */
-    width?: number | string;
-
-    /**
-     * Define o modo inicial da timeline.
-     * Default: "NARRATIVE"
-     */
-    defaultMode?: "NARRATIVE" | "TECHNICAL";
 };
 
 export type CharacterRef = {
     id: string;
     name: string;
 };
+
 export type RollRef = {
     id: string;
 
-    diceRolled: string;      // "1d20"
-    rolls: number[];         // [15]
-    modifier: number;        // atributo + bônus
-    total: number;           // resultado final
+    diceRolled: string;
+    rolls: number[];
+    modifier: number;
+    total: number;
 
     success?: boolean | null;
     critical: boolean;
@@ -55,9 +40,9 @@ export type RollRef = {
     pendingReaction?: boolean;
     reacted?: boolean;
 
-    // Opcional: ajuda a explicar o erro
     targetDefense?: number | null;
 };
+
 export type CombatLog = {
     id: string;
 
@@ -80,15 +65,19 @@ export type CombatLog = {
     rollId?: string | null;
     turnId?: string | null;
 };
+
 export type TimelineBlock = {
     id: string;
     title: string;
     logs: CombatLog[];
-
-    // Estado visual (UI only)
-    collapsed?: boolean;
 };
+
 export type CombatTimelineMode = "NARRATIVE" | "TECHNICAL";
+
+/* =========================
+   TIMELINE BUILDER
+========================= */
+
 function buildTimeline(logs: CombatLog[]): TimelineBlock[] {
     const ordered = [...logs].sort(
         (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
@@ -99,6 +88,7 @@ function buildTimeline(logs: CombatLog[]): TimelineBlock[] {
 
     for (const log of ordered) {
         if (log.type === "COMBAT_START") continue;
+
         if (log.type === "TURN_START") {
             current = {
                 id: log.turnId ?? log.id,
@@ -133,10 +123,10 @@ function buildTimeline(logs: CombatLog[]): TimelineBlock[] {
 ========================= */
 
 export function CombatTimeline({ logs }: CombatTimelineProps) {
-    const [mode, setMode] = useState<"NARRATIVE" | "TECHNICAL">("NARRATIVE");
+    const [mode, setMode] = useState<CombatTimelineMode>("NARRATIVE");
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
-    const timeline = buildTimeline(logs);
+    const timeline = buildTimeline(logs).reverse();
 
     function toggle(id: string) {
         setCollapsed(prev => ({
@@ -145,6 +135,15 @@ export function CombatTimeline({ logs }: CombatTimelineProps) {
         }));
     }
 
+    useEffect(() => {
+        if (timeline.length > 0) {
+            setCollapsed(prev => ({
+                ...prev,
+                [timeline[0].id]: false,
+            }));
+        }
+    }, [logs]);
+    
     return (
         <Box sx={{ width: 360, height: "100%", overflowY: "auto" }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
@@ -202,9 +201,8 @@ export function CombatTimeline({ logs }: CombatTimelineProps) {
     );
 }
 
-
 /* =========================
-   LINHA DE AÇÃO
+   ACTION LINE
 ========================= */
 
 function ActionLine({
@@ -212,8 +210,13 @@ function ActionLine({
     mode,
 }: {
     log: CombatLog;
-    mode: "NARRATIVE" | "TECHNICAL";
+    mode: CombatTimelineMode;
 }) {
+
+    /* =========================
+       TECHNICAL MODE
+    ========================= */
+
     if (mode === "TECHNICAL") {
         const r = log.roll;
 
@@ -245,94 +248,77 @@ function ActionLine({
                         )}
 
                         <Typography fontSize={11}>
-                            Resultado:{" "}
-                            {r.success === true && "SUCCESS"}
-                            {r.success === false && "FAIL"}
-                            {r.success === null && "PENDING"}
+                            Estado:{" "}
+                            {r.pendingReaction
+                                ? "AGUARDANDO REAÇÃO"
+                                : r.success === true
+                                    ? "SUCESSO FINAL"
+                                    : r.success === false
+                                        ? "FALHA"
+                                        : "INDEFINIDO"}
                         </Typography>
-
-                        {r.pendingReaction && (
-                            <Typography fontSize={11} color="#60a5fa">
-                                ⌛ Aguardando reação
-                            </Typography>
-                        )}
                     </Box>
                 )}
             </Box>
         );
     }
 
+    /* =========================
+       NARRATIVE MODE
+    ========================= */
 
-    // =========================
-    // AÇÃO PRINCIPAL
-    // =========================
     if (log.type === "ROLL" && log.roll) {
         const r = log.roll;
 
-        const color = r.success
-            ? "#4ade80"
-            : "#f87171";
+        const isFinalSuccess = r.success === true && !r.pendingReaction;
+        const isFailure = r.success === false;
 
-        let explanation = "";
-        if (r.success === false) {
-            explanation = "não superou a defesa do alvo";
-        } else if (r.critical) {
-            explanation = "acerto crítico";
-        }
+        let color = "#d1d5db";
+
+        if (r.pendingReaction) color = "#60a5fa";
+        else if (isFinalSuccess) color = "#4ade80";
+        else if (isFailure) color = "#f87171";
 
         return (
             <Box>
                 <Typography fontSize={13} color="#facc15">
                     ⚔️ {log.message}
                 </Typography>
+
                 <Typography fontSize={12} color={color} ml={2}>
                     🎲 {r.diceRolled} → {r.total}
-                    {r.success ? " ✅ Sucesso" : " ❌ Falha"}
-                    {explanation && ` • ${explanation}`}
+
+                    {r.pendingReaction && " • Acertou, aguardando reação"}
+                    {isFinalSuccess && " • Sucesso"}
+                    {isFailure && " • Falhou"}
+                    {r.critical && " • CRÍTICO"}
                 </Typography>
 
-                {r.pendingReaction && (
-                    <Typography fontSize={11} color="#60a5fa" ml={4}>
-                        ⌛ Aguardando reação
+                {typeof r.damage === "number" && !r.pendingReaction && (
+                    <Typography fontSize={11} ml={4} color="#f87171">
+                        💥 Dano aplicado: {r.damage}
                     </Typography>
                 )}
             </Box>
         );
     }
 
-    // =========================
-    // REAÇÃO
-    // =========================
     if (log.type === "REACTION") {
         return (
-            <Typography
-                fontSize={12}
-                color="#60a5fa"
-                ml={4}
-            >
-                ↩️ Reação: {log.message}
+            <Typography fontSize={12} color="#60a5fa" ml={4}>
+                ↩️ {log.message}
             </Typography>
         );
     }
 
-    // =========================
-    // FIM DE TURNO
-    // =========================
     if (log.type === "TURN_END") {
         return (
-            <Typography
-                fontSize={11}
-                color="#9ca3af"
-                ml={1}
-            >
+            <Typography fontSize={11} color="#9ca3af" ml={1}>
                 ⏹ Turno encerrado
             </Typography>
         );
     }
 
-    // =========================
-    // SISTEMA / OUTROS
-    // =========================
     return (
         <Typography fontSize={12} color="#d1d5db">
             {log.message}
