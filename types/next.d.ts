@@ -1,8 +1,0 @@
-import { Socket } from "net";
-import { Server as HTTPServer } from "http";
-
-declare module "net" {
-  interface Socket {
-    server?: HTTPServer & { wss?: import("ws").Server };
-  }
-}
