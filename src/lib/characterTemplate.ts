@@ -152,6 +152,7 @@ export async function createCharacterTemplate(): Promise<any> {/* eslint-disable
         "maxLife": 20,
         "xp": 0,
         "baseDefense": 0,
+        "history": "",
         "strength": 0,
         "agility": 0,
         "vigor": 0,

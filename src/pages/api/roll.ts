@@ -6,6 +6,36 @@ import { LogType, EffectType, ActionType } from "@prisma/client";
 import { getAttributeValue } from "../../lib/attributes";
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+    if (req.method === "GET") {
+        const { combatId, characterId, limit = 20 } = req.query;
+
+        try {
+            const rolls = await prisma.rollResult.findMany({
+                where: {
+                    ...(combatId ? { combatId: String(combatId) } : {}),
+                    ...(characterId ? { characterId: String(characterId) } : {}),
+                },
+                include: {
+                    character: {
+                        select: { id: true, name: true },
+                    },
+                    preset: {
+                        select: { id: true, name: true, type: true },
+                    },
+                },
+                orderBy: {
+                    createdAt: "desc",
+                },
+                take: Number(limit),
+            });
+
+            return res.status(200).json({ rolls });
+        } catch (err) {
+            console.error("Erro ao buscar testes", err);
+            return res.status(500).json({ message: "Erro interno" });
+        }
+    }
+
     if (req.method !== "POST") {
         res.status(405).end();
         return;
@@ -209,7 +239,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         }
     }
 
-   
+
 
     return res.status(201).json({ roll });
 }

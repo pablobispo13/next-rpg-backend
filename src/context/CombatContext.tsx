@@ -28,6 +28,9 @@ export type CombatContextType = {
     ) => Promise<void>;
     refreshCombat: () => Promise<void>;
     nextRefreshIn: number;
+    pauseAutoRefresh: () => void;
+    resumeAutoRefresh: () => void;
+    isAutoRefreshPaused: boolean;
 };
 
 const CombatContext = createContext<CombatContextType>({} as any);
@@ -47,7 +50,15 @@ export function CombatProvider({
     const optimisticActionRef = useRef(false);
     const [selectedTargets, setSelectedTargets] = useState<string[]>([]);
     const [pendingReactionRoll, setPendingReactionRoll] = useState<any | null>(null);
+    const [isAutoRefreshPaused, setIsAutoRefreshPaused] = useState(false);
 
+    function pauseAutoRefresh() {
+        setIsAutoRefreshPaused(true);
+    }
+
+    function resumeAutoRefresh() {
+        setIsAutoRefreshPaused(false);
+    }
     /* =========================
        LOAD COMBAT (estado real)
     ========================= */
@@ -124,8 +135,16 @@ export function CombatProvider({
         await loadCombat(combatId);
         setNextRefreshIn(REFRESH_INTERVAL / 1000);
     }, [combatId]);
+
+    useEffect(() => {
+        if (isAutoRefreshPaused) {
+            setNextRefreshIn(0);
+        }
+    }, [isAutoRefreshPaused]);
+
     useEffect(() => {
         if (!combatId) return;
+        if (isAutoRefreshPaused) return;
 
         refreshCombat(); // carrega imediatamente
 
@@ -144,7 +163,7 @@ export function CombatProvider({
             if (intervalRef.current) clearInterval(intervalRef.current);
             if (countdownRef.current) clearInterval(countdownRef.current);
         };
-    }, [combatId, refreshCombat]);
+    }, [combatId, refreshCombat, isAutoRefreshPaused]);
 
     async function loadCombat(id = combatId) {
         if (!id) return;
@@ -360,6 +379,9 @@ export function CombatProvider({
                 resolveReaction,
                 refreshCombat,
                 nextRefreshIn,
+                pauseAutoRefresh,
+                resumeAutoRefresh,
+                isAutoRefreshPaused,
             }}
         >
             {children}

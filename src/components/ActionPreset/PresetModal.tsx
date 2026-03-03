@@ -110,27 +110,29 @@ export function PresetModal({
     };
 
     return (
-        <Dialog open={open} onClose={() => {
-            setForm({
-                name: "",
-                description: "",
-                type: "ATTACK",
-                targetType: "ENEMY",
-                attribute: "STRENGTH",
-                diceFormula: "1d20",
-                impactFormula: "",
-                modifier: 0,
-                critThreshold: 20,
-                critMultiplier: 2,
-                requiresTurn: true,
-                allowOutOfCombat: false,
-                appliesEffect: false,
-                durationTurns: "",
-                statAffected: "",
-                effectAmount: "",
-                statusApplied: "",
-            })
-            onClose()
+        <Dialog open={open} onClose={(event, reason) => {
+            if (reason !== 'backdropClick') {
+                setForm({
+                    name: "",
+                    description: "",
+                    type: "ATTACK",
+                    targetType: "ENEMY",
+                    attribute: "STRENGTH",
+                    diceFormula: "1d20",
+                    impactFormula: "",
+                    modifier: 0,
+                    critThreshold: 20,
+                    critMultiplier: 2,
+                    requiresTurn: true,
+                    allowOutOfCombat: false,
+                    appliesEffect: false,
+                    durationTurns: "",
+                    statAffected: "",
+                    effectAmount: "",
+                    statusApplied: "",
+                })
+                onClose()
+            }
         }} maxWidth="md" fullWidth>
             <DialogTitle>
                 {preset ? "Editar Preset" : "Novo Preset"}

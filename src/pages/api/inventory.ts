@@ -8,6 +8,7 @@ type InventoryBody = {
     itemId?: string;
     name?: string;
     quantity?: number;
+    description?: string
     presetId?: string;
 };
 
@@ -18,7 +19,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     }
 
     const user = req.user!;
-    const { action, characterId, itemId, name, quantity = 1, presetId }: InventoryBody = req.body;
+    const { action, characterId, itemId, name, quantity = 1, description = "", presetId }: InventoryBody = req.body;
 
     if (!characterId && action !== "list") {
         return res.status(400).json({ message: "É necessário informar o personagem" });
@@ -50,6 +51,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 data: {
                     name,
                     quantity,
+                    description,
                     characterId: characterId!,
                     presetId: presetId ?? undefined,
                 },
@@ -76,12 +78,13 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 data: {
                     name: name ?? existingItem.name,
                     quantity: quantity ?? existingItem.quantity,
+                    description: description ?? existingItem.description,
                     presetId: presetId ?? existingItem.presetId,
                 },
                 include: { preset: true },
             });
 
-           
+
             return res.status(200).json({ item: updatedItem });
 
         case "delete":
@@ -96,7 +99,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             }
 
             await prisma.inventory.delete({ where: { id: itemId } });
-           
+
             return res.status(200).json({ message: "Item removido" });
 
         default:

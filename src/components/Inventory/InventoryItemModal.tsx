@@ -28,14 +28,17 @@ export function InventoryItemModal({
 }: Props) {
     const [name, setName] = useState("");
     const [quantity, setQuantity] = useState(1);
+    const [description, setDescription] = useState("");
 
     useEffect(() => {
         if (item) {
             setName(item.name);
             setQuantity(item.quantity);
+            setDescription(item.description);
         } else {
             setName("");
             setQuantity(1);
+            setDescription("");
         }
     }, [item, open]);
 
@@ -46,13 +49,18 @@ export function InventoryItemModal({
             itemId: item?.id,
             name,
             quantity,
+            description,
         });
 
         onClose();
     };
 
     return (
-        <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
+        <Dialog open={open} onClose={(event, reason) => {
+            if (reason !== 'backdropClick')
+                onClose()
+        }
+        } fullWidth maxWidth="sm">
             <DialogTitle>
                 {item ? "Editar Item" : "Adicionar Item"}
             </DialogTitle>
@@ -72,6 +80,14 @@ export function InventoryItemModal({
                         inputProps={{ min: 1 }}
                         value={quantity}
                         onChange={(e) => setQuantity(Number(e.target.value))}
+                        fullWidth
+                    />
+                    <TextField
+                        multiline
+                        rows={4}
+                        label="Descrição"
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
                         fullWidth
                     />
                 </Stack>

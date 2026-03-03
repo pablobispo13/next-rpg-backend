@@ -63,7 +63,14 @@ export default function CharacterCombatSelector({
     };
 
     return (
-        <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
+        <Dialog
+            open={open}
+            onClose={(event, reason) => {
+                if (reason !== 'backdropClick')
+                    onClose()
+            }}
+            fullWidth
+            maxWidth="sm" >
             <DialogTitle>
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                     <Typography variant="h6">Criar Combate</Typography>
@@ -119,6 +126,6 @@ export default function CharacterCombatSelector({
                     Criar combate
                 </Button>
             </DialogActions>
-        </Dialog>
+        </Dialog >
     );
 }

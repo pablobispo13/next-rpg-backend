@@ -93,6 +93,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       intellect,
       presence,
       baseDefense,
+      history,
       dodgePresetId,
       blockPresetId,
       counterAttackPresetId,
@@ -110,6 +111,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         intellect: intellect ?? 10,
         presence: presence ?? 10,
         baseDefense: baseDefense ?? 0,
+        history: history ?? "",
         ownerId: user.userId,
         dodgePresetId: dodgePresetId ?? null,
         blockPresetId: blockPresetId ?? null,
@@ -141,7 +143,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       },
     });
 
-   
+
     res.status(201).json(character);
     return;
   }

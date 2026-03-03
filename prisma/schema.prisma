@@ -100,7 +100,8 @@ model Character {
   intellect Int
   presence  Int
 
-  baseDefense Int @default(0)
+  baseDefense Int     @default(0)
+  history     String?
 
   // Presets automáticos de defesa
   dodgePresetId String?       @db.ObjectId
@@ -247,9 +248,10 @@ model ActionLog {
 ///////////////////////
 
 model Inventory {
-  id       String @id @default(auto()) @map("_id") @db.ObjectId
-  name     String
-  quantity Int
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  quantity    Int
+  description String?
 
   characterId String    @db.ObjectId
   character   Character @relation(fields: [characterId], references: [id])

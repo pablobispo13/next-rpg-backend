@@ -31,6 +31,7 @@ export function CharacterStatsModal({
     maxLife: 0,
     xp: 0,
     baseDefense: 0,
+    history: "",
     strength: 0,
     agility: 0,
     vigor: 0,
@@ -46,6 +47,7 @@ export function CharacterStatsModal({
         maxLife: character.maxLife,
         xp: character.xp,
         baseDefense: character.baseDefense ?? 0,
+        history: character.history ?? "",
         strength: character.strength,
         agility: character.agility,
         vigor: character.vigor,
@@ -70,6 +72,7 @@ export function CharacterStatsModal({
       maxLife: Number(form.maxLife),
       xp: Number(form.xp),
       baseDefense: Number(form.baseDefense),
+      history: String(form.history),
       strength: Number(form.strength),
       agility: Number(form.agility),
       vigor: Number(form.vigor),
@@ -81,20 +84,23 @@ export function CharacterStatsModal({
   };
 
   return (
-    <Dialog open={open} onClose={() => {
-      setForm({
-        name: "",
-        life: 0,
-        maxLife: 0,
-        xp: 0,
-        baseDefense: 0,
-        strength: 0,
-        agility: 0,
-        vigor: 0,
-        intellect: 0,
-        presence: 0,
-      })
-      onClose()
+    <Dialog open={open} onClose={(event, reason) => {
+      if (reason !== 'backdropClick') {
+        setForm({
+          name: "",
+          life: 0,
+          maxLife: 0,
+          xp: 0,
+          baseDefense: 0,
+          history: "",
+          strength: 0,
+          agility: 0,
+          vigor: 0,
+          intellect: 0,
+          presence: 0,
+        })
+        onClose()
+      }
     }} maxWidth="sm" fullWidth>
       <DialogTitle>Editar Dados do Personagem</DialogTitle>
 
@@ -146,6 +152,14 @@ export function CharacterStatsModal({
             <TextField label="Intelecto" type="number" value={form.intellect} onChange={e => update("intellect", e.target.value)} />
             <TextField label="Presença" type="number" value={form.presence} onChange={e => update("presence", e.target.value)} />
           </Stack>
+          <TextField
+            multiline
+            rows={12}
+            label="História"
+            value={form.history}
+            onChange={e => update("history", e.target.value)}
+            fullWidth
+          />
         </Stack>
       </DialogContent>
 
@@ -157,6 +171,7 @@ export function CharacterStatsModal({
             maxLife: 0,
             xp: 0,
             baseDefense: 0,
+            history: "",
             strength: 0,
             agility: 0,
             vigor: 0,

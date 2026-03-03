@@ -47,6 +47,9 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
     resolveReaction,
     refreshCombat,
     nextRefreshIn,
+    pauseAutoRefresh,
+    resumeAutoRefresh,
+    isAutoRefreshPaused,
   } = useCombat();
 
   const router = useRouter();
@@ -111,6 +114,17 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
           >
             Atualizar agora
           </Button>
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={
+              isAutoRefreshPaused
+                ? resumeAutoRefresh
+                : pauseAutoRefresh
+            }
+          >
+            {isAutoRefreshPaused ? "Retomar Auto-Update" : "Pausar Auto-Update"}
+          </Button>
         </Stack>
 
         {isMaster && (
@@ -169,13 +183,13 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
                     backgroundColor: isTarget
                       ? "#5a1f1f"
                       : isActive
-                      ? "#2a2a55"
-                      : "#1c1c2e",
+                        ? "#2a2a55"
+                        : "#1c1c2e",
                     border: isActive
                       ? "2px solid #4fc3f7"
                       : isTarget
-                      ? "2px solid #ef5350"
-                      : "1px solid #333",
+                        ? "2px solid #ef5350"
+                        : "1px solid #333",
                     boxShadow: isActive
                       ? "0 0 12px rgba(79,195,247,0.6)"
                       : "none",
@@ -204,13 +218,13 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
                           backgroundColor:
                             p.character.life /
                               p.character.maxLife >
-                            0.6
+                              0.6
                               ? "#66bb6a"
                               : p.character.life /
-                                  p.character.maxLife >
+                                p.character.maxLife >
                                 0.3
-                              ? "#ffa726"
-                              : "#ef5350",
+                                ? "#ffa726"
+                                : "#ef5350",
                         },
                       }}
                     />

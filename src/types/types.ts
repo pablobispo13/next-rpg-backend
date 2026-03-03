@@ -5,6 +5,7 @@ export type Character = {
     baseDefense: number
     // Controle
     owner?: CharacterOwner;
+    history?: string
 
     // Recursos
     life: number;
@@ -41,6 +42,7 @@ export type CharacterInventory = {
     id: string;
     name: string;
     quantity: number;
+    description: string
     preset?: ActionPresetType | null;
 };
 
