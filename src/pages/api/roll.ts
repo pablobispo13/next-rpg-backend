@@ -6,6 +6,7 @@ import { LogType, EffectType, ActionType } from "@prisma/client";
 import { getAttributeValue } from "../../lib/attributes";
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
+
     if (req.method === "GET") {
         const { combatId, characterId, limit = 20 } = req.query;
 
@@ -30,6 +31,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             });
 
             return res.status(200).json({ rolls });
+
         } catch (err) {
             console.error("Erro ao buscar testes", err);
             return res.status(500).json({ message: "Erro interno" });
@@ -42,30 +44,105 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     }
 
     const user = req.user!;
-    const { characterId, actionPresetId, targetIds = [], combatId, turnId } = req.body;
 
-    if (!characterId || !actionPresetId)
-        return res.status(400).json({ message: "Dados inválidos" });
+    const {
+        characterId,
+        actionPresetId,
+        diceFormula,
+        logMessage,
+        targetIds = [],
+        combatId,
+        turnId
+    } = req.body;
+
+    if (!characterId)
+        return res.status(400).json({ message: "characterId obrigatório" });
+
+    if (!actionPresetId && !diceFormula)
+        return res.status(400).json({
+            message: "Informe actionPresetId ou diceFormula"
+        });
 
     if (turnId) {
-        const turn = await prisma.combatTurn.findUnique({ where: { id: turnId } });
+        const turn = await prisma.combatTurn.findUnique({
+            where: { id: turnId }
+        });
+
         if (!turn || (combatId && turn.combatId !== combatId)) {
-            return res.status(400).json({ message: "turnId inválido ou não pertence ao combate" });
+            return res.status(400).json({
+                message: "turnId inválido ou não pertence ao combate"
+            });
         }
     }
 
-    const character = await prisma.character.findUnique({ where: { id: characterId } });
-    if (!character) return res.status(404).json({ message: "Personagem não encontrado" });
+    const character = await prisma.character.findUnique({
+        where: { id: characterId }
+    });
+
+    if (!character)
+        return res.status(404).json({ message: "Personagem não encontrado" });
 
     if (user.role !== "MESTRE" && character.ownerId !== user.userId)
         return res.status(403).json({ message: "Acesso negado" });
 
-    const preset = await prisma.actionPreset.findUnique({ where: { id: actionPresetId } });
-    if (!preset) return res.status(404).json({ message: "Preset inválido" });
 
-    /* =========================
-       ATRIBUTO + EFEITOS
-    ========================= */
+    /* =====================================================
+       ROLAGEM MANUAL (SEM PRESET)
+    ===================================================== */
+
+    if (diceFormula && !actionPresetId) {
+
+        const dice = rollDice(diceFormula);
+
+        const resolvedTargetIds =
+            targetIds.length ? targetIds : [character.id];
+
+        const roll = await prisma.rollResult.create({
+            data: {
+                characterId: character.id,
+                presetId: null,
+                combatId: combatId ?? null,
+                turnId: turnId ?? null,
+                targetIds: resolvedTargetIds,
+                diceRolled: diceFormula,
+                rolls: dice.rolls,
+                modifier: 0,
+                total: dice.total,
+                critical: false,
+                success: null,
+                pendingReaction: false,
+                reacted: false,
+                reactionType: null,
+            },
+        });
+
+        await prisma.actionLog.create({
+            data: {
+                type: LogType.ROLL,
+                message:
+                    logMessage ??
+                    `${character.name} rolou ${diceFormula} (${dice.rolls.join(", ")}) = ${dice.total}`,
+                characterId: character.id,
+                rollId: roll.id,
+                combatId: combatId ?? null,
+                turnId: turnId ?? null,
+            },
+        });
+
+        return res.status(201).json({ roll });
+    }
+
+
+    /* =====================================================
+       ROLAGEM COM PRESET (SISTEMA ORIGINAL)
+    ===================================================== */
+
+    const preset = await prisma.actionPreset.findUnique({
+        where: { id: actionPresetId }
+    });
+
+    if (!preset)
+        return res.status(404).json({ message: "Preset inválido" });
 
     const baseAttribute = getAttributeValue(character, preset.attribute);
 
@@ -80,13 +157,12 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     const effectBonus = activeEffects.reduce((sum, e) => sum + e.value, 0);
     const effectiveAttribute = baseAttribute + effectBonus;
 
-    /* =========================
-       ROLAGEM
-    ========================= */
 
     const attackRoll = rollDice(preset.diceFormula);
     const flatModifier = preset.modifier ?? 0;
-    const attackTotal = attackRoll.total + effectiveAttribute + flatModifier;
+
+    const attackTotal =
+        attackRoll.total + effectiveAttribute + flatModifier;
 
     const isCritical = attackRoll.rolls.some(
         r => r >= (preset.critThreshold ?? 999)
@@ -96,6 +172,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         preset.targetType === "SELF" || targetIds.length === 0
             ? [character.id]
             : targetIds;
+
 
     const roll = await prisma.rollResult.create({
         data: {
@@ -116,25 +193,29 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         },
     });
 
-    /* =========================
+
+    /* =====================================================
        RESOLUÇÃO POR ALVO
-    ========================= */
+    ===================================================== */
 
     for (const targetId of resolvedTargetIds) {
-        const target = await prisma.character.findUnique({ where: { id: targetId } });
+
+        const target = await prisma.character.findUnique({
+            where: { id: targetId }
+        });
+
         if (!target) continue;
 
         let passedBaseDefense = true;
 
         if (preset.type === ActionType.ATTACK) {
-            passedBaseDefense = attackTotal >= (target.baseDefense ?? 0);
+            passedBaseDefense =
+                attackTotal >= (target.baseDefense ?? 0);
         }
 
-        /* =========================
-           FALHA NA DEFESA BASE
-        ========================= */
 
         if (!passedBaseDefense) {
+
             await prisma.rollResult.update({
                 where: { id: roll.id },
                 data: { success: false },
@@ -155,9 +236,6 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             continue;
         }
 
-        /* =========================
-           SUCESSO / REAÇÃO
-        ========================= */
 
         const shouldOpenReaction =
             preset.type === ActionType.ATTACK &&
@@ -167,26 +245,39 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 target.counterAttackPresetId
             );
 
+
         let impactTotal: number | null = null;
 
         if (preset.impactFormula) {
+
             const impactRoll = rollDice(preset.impactFormula);
+
             impactTotal = impactRoll.total + effectiveAttribute;
 
             if (isCritical && preset.critMultiplier) {
-                impactTotal = Math.floor(impactTotal * preset.critMultiplier);
+                impactTotal = Math.floor(
+                    impactTotal * preset.critMultiplier
+                );
             }
         }
+
 
         await prisma.rollResult.update({
             where: { id: roll.id },
             data: {
                 success: true,
                 pendingReaction: shouldOpenReaction,
-                damage: preset.type === ActionType.ATTACK ? impactTotal : null,
-                healing: preset.type === ActionType.HEAL ? impactTotal : null,
+                damage:
+                    preset.type === ActionType.ATTACK
+                        ? impactTotal
+                        : null,
+                healing:
+                    preset.type === ActionType.HEAL
+                        ? impactTotal
+                        : null,
             },
         });
+
 
         await prisma.actionLog.create({
             data: {
@@ -202,15 +293,13 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             },
         });
 
-        /* =========================
-           EFEITOS CONTÍNUOS
-        ========================= */
 
         if (
             preset.appliesEffect &&
             preset.durationTurns &&
             preset.effectAmount
         ) {
+
             await prisma.characterEffect.create({
                 data: {
                     characterId: target.id,
@@ -238,8 +327,6 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             });
         }
     }
-
-
 
     return res.status(201).json({ roll });
 }

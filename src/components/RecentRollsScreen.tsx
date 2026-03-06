@@ -129,9 +129,10 @@ export default function RecentRollsScreen() {
                                                 {roll.character.name}
                                             </Typography>
 
-                                            <Typography fontSize={13} color="#aaa">
-                                                {roll.preset.name} • {roll.preset.type}
-                                            </Typography>
+                                            {roll.preset &&
+                                                <Typography fontSize={13} color="#aaa">
+                                                    {roll.preset.name} • {roll.preset.type}
+                                                </Typography>}
 
                                             {/* Bloco do dado */}
                                             <Box
@@ -164,12 +165,14 @@ export default function RecentRollsScreen() {
                                             </Box>
 
                                             {/* Resultado */}
-                                            <Typography
-                                                fontWeight="bold"
-                                                color={roll.success ? "#66bb6a" : "#ef5350"}
-                                            >
-                                                {roll.success ? "✅ Sucesso" : "❌ Falha"}
-                                            </Typography>
+                                            {roll.success &&
+                                                <Typography
+                                                    fontWeight="bold"
+                                                    color={roll.success ? "#66bb6a" : "#ef5350"}
+                                                >
+                                                    {roll.success ? "✅ Sucesso" : "❌ Falha"}
+                                                </Typography>
+                                            }
 
                                             {/* Dano */}
                                             {roll.damage !== null && (
@@ -186,7 +189,7 @@ export default function RecentRollsScreen() {
                                             )}
 
                                             {/* Reação */}
-                                            {roll.preset.type === "REACT" && roll.combatId != null && roll.turnId != null && (
+                                            {roll.preset && roll.preset.type === "REACT" && roll.combatId != null && roll.turnId != null && (
                                                 <Typography fontSize={12} color="#90caf9">
                                                     ⚡ Reação {String(roll.reacted)}{roll.reacted ? "executada" : "pendente"}
                                                 </Typography>

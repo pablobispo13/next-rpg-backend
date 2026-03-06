@@ -3,6 +3,7 @@ import { AppBar, Toolbar, Button } from "@mui/material";
 import { useAuth } from "../context/AuthContext";
 import ButtonTheme from "./ButtonTheme";
 import { useRouter } from "next/router";
+import { DiceInputRoller } from "./DiceInputRoller";
 
 type LayoutProps = {
   children: ReactNode;
@@ -14,12 +15,7 @@ export default function Layout({ children }: LayoutProps) {
   return (
     <div className="min-h-screen flex flex-col">
       <AppBar position="static">
-        <Toolbar>
-          <Button variant="text" onClick={() => {
-            router.push("/protected/")
-          }} sx={{ flexGrow: 1 }}>
-            RPG
-          </Button>
+        <Toolbar sx={{ display: "flex", justifyContent: "flex-end" }}>
           <ButtonTheme />
           {user && <Button color="inherit" onClick={() => logout("manual")}>Logout</Button>}
         </Toolbar>

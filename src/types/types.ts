@@ -84,7 +84,7 @@ export type Roll = {
     diceRolled?: string;
     createdAt?: string;
     preset: ActionPresetType
-    reactionType?: "DODGE" | "COUNTER_ATTACK" | "BLOCK"
+    reactionType?: "DODGE" | "COUNTER_ATTACK" | "BLOCK" | "SKIP"
 
 };
 export type ActionLog = {

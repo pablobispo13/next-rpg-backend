@@ -10,7 +10,7 @@ export type CombatContextType = {
     actionUsed: boolean;
     selectedTargets: string[];
     pendingReactionRoll: any | null;
-
+    myCharacterIds: any;
     loadCombat: (id?: string) => Promise<void>;
     selectTarget: (id: string) => void;
     clearTargets: () => void;
@@ -24,7 +24,7 @@ export type CombatContextType = {
     endTurn: () => Promise<void>;
     resolveReaction: (
         rollId: string,
-        reactionType: "DODGE" | "COUNTER_ATTACK" | "BLOCK"
+        reactionType: "DODGE" | "COUNTER_ATTACK" | "BLOCK" | "SKIP"
     ) => Promise<void>;
     refreshCombat: () => Promise<void>;
     nextRefreshIn: number;
@@ -48,6 +48,7 @@ export function CombatProvider({
     const [combat, setCombat] = useState<any | null>(null);
     const [actionUsed, setActionUsed] = useState(false);
     const optimisticActionRef = useRef(false);
+    const [myCharacterIds, setMyCharacterIds] = useState<string[]>([]);
     const [selectedTargets, setSelectedTargets] = useState<string[]>([]);
     const [pendingReactionRoll, setPendingReactionRoll] = useState<any | null>(null);
     const [isAutoRefreshPaused, setIsAutoRefreshPaused] = useState(false);
@@ -87,6 +88,7 @@ export function CombatProvider({
                 myCharacterIds.includes(tid)
             );
         });
+        setMyCharacterIds(myCharacterIds)
 
         if (!pendingRoll) return null;
 
@@ -337,7 +339,7 @@ export function CombatProvider({
 
     async function resolveReaction(
         rollId: string,
-        reactionType: "DODGE" | "COUNTER_ATTACK" | "BLOCK"
+        reactionType: "DODGE" | "COUNTER_ATTACK" | "BLOCK" | "SKIP"
     ) {
         if (!combat || !pendingReactionRoll) return;
 
@@ -369,6 +371,7 @@ export function CombatProvider({
                 actionUsed,
                 selectedTargets,
                 pendingReactionRoll,
+                myCharacterIds,
                 loadCombat,
                 selectTarget,
                 clearTargets,

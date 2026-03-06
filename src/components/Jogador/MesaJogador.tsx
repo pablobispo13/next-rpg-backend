@@ -6,6 +6,7 @@ import { Button, Stack } from "@mui/material";
 import { Character } from "../../types/types";
 import api from "../../lib/api";
 import { createCharacterTemplate } from "../../lib/characterTemplate";
+import { DiceInputRoller } from "../DiceInputRoller";
 
 type Props = {
   isSpectator?: boolean;
@@ -54,10 +55,11 @@ export default function MesaJogador({ forcedCharacterId, isSpectator = false }: 
   return (
     <>
       {isSpectator && (
-        <Stack mb={2}>
+        <Stack mb={2} alignItems={"center"}>
           <Button disabled color="warning">
             Visualização de personagem específica
           </Button>
+          <DiceInputRoller characterId={character.id} />
         </Stack>
       )}
 

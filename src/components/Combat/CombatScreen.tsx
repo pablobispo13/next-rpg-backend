@@ -20,6 +20,7 @@ import { useRouter } from "next/router";
 import { ActionPresetType } from "../../types/types";
 import { CombatTimeline } from "./CombatTimeline";
 import { useState } from "react";
+import { DiceInputRoller } from "../DiceInputRoller";
 
 type CombatScreenProps = { combatId: string };
 
@@ -39,6 +40,7 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
     combat,
     isMyTurn,
     actionUsed,
+    myCharacterIds,
     selectedTargets,
     selectTarget,
     useMainAction,
@@ -50,10 +52,10 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
     pauseAutoRefresh,
     resumeAutoRefresh,
     isAutoRefreshPaused,
+
   } = useCombat();
 
   const router = useRouter();
-  const [endingTurn, setEndingTurn] = useState<boolean>(false);
 
   if (!combat || !combat.participants?.length)
     return <>Carregando combate...</>;
@@ -125,6 +127,7 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
           >
             {isAutoRefreshPaused ? "Retomar Auto-Update" : "Pausar Auto-Update"}
           </Button>
+          {!isMaster && <DiceInputRoller characterId={myCharacterIds[0]} />}
         </Stack>
 
         {isMaster && (
@@ -358,12 +361,7 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
               variant="outlined"
               disabled={!canEndTurn}
               onClick={async () => {
-                try {
-                  setEndingTurn(true);
-                  await endTurn();
-                } finally {
-                  setEndingTurn(false);
-                }
+                await endTurn();
               }}
             >
               Passar Turno
@@ -447,6 +445,12 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
                       Contra-atacar
                     </Button>
                   )}
+                  <Button
+                    color="error"
+                    onClick={() => resolveReaction(pendingReactionRoll.id, "SKIP")}
+                  >
+                    Não reagir
+                  </Button>
                 </Stack>
               )
             )}

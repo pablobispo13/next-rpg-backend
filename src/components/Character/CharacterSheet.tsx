@@ -21,6 +21,7 @@ import api from "../../lib/api";
 import { Roller } from "../Jogador/Roller";
 import { InventoryItemModal } from "../Inventory/InventoryItemModal";
 import { PresetModal } from "../ActionPreset/PresetModal";
+import { DiceInputRoller } from "../DiceInputRoller";
 
 
 type Props = {
@@ -56,8 +57,12 @@ export function CharacterSheet({
 
   return (
     <>
+      {!isMasterView && <Stack mb={2} alignItems={"center"}>
+        <DiceInputRoller characterId={character.id} />
+      </Stack>
+      }
       {!isMasterView &&
-        <Paper elevation={6} sx={{ p: 3 }}>
+        <Paper elevation={6} sx={{ p: 3, gap: 3 }}>
           <Stack gap={3}>
             {/* Header */}
             <Stack direction="row" justifyContent="space-between" alignItems="center">
@@ -245,7 +250,7 @@ export function CharacterSheet({
                         <SimpleListItem key={actionLog.id + "_list"}>
                           <Stack display={"flex"} flexDirection={"column"}>
                             <Typography> {actionLog.message}</Typography>
-                            {actionLog.roll ?
+                            {actionLog.roll?.preset && actionLog.roll ?
                               <Typography>Dados: {actionLog.roll?.preset.diceFormula}
 
                                 {(character as any)[actionLog.roll?.preset.attribute.toLowerCase() || 0] !== 0/* eslint-disable  @typescript-eslint/no-explicit-any */
@@ -254,7 +259,8 @@ export function CharacterSheet({
                                 }
                                 {actionLog.roll?.preset.modifier ? " + " + actionLog.roll?.preset.modifier : undefined} = {actionLog.roll?.total}
                               </Typography>
-                              : undefined
+                              : <Typography>Dados: {actionLog.roll?.diceRolled} = {actionLog.roll?.total}
+                              </Typography>
                             }</Stack>
                         </SimpleListItem>
                         :

@@ -73,10 +73,42 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
         reactionPresetId = target.counterAttackPresetId;
     }
+    else if (reactionType === "SKIP") {
+
+        await prisma.character.update({
+            where: { id: target.id },
+            data: {
+                life: {
+                    decrement: damage,
+                },
+            },
+        });
+
+        await prisma.rollResult.update({
+            where: { id: attackRoll.id },
+            data: {
+                reacted: true,
+                pendingReaction: false,
+            },
+        });
+
+        await prisma.actionLog.create({
+            data: {
+                type: LogType.REACTION,
+                message: `${target.name} decidiu não reagir e sofreu ${damage} de dano`,
+                characterId: target.id,
+                targetId: attacker.id,
+                rollId: attackRoll.id,
+                combatId: attackRoll.combatId,
+                turnId,
+            },
+        });
+
+        return res.status(200).json({ success: false, skipped: true });
+    }
     else {
         return res.status(400).json({ message: "Reação inválida" });
     }
-
     const preset = await prisma.actionPreset.findUnique({
         where: { id: reactionPresetId },
     });
@@ -87,11 +119,9 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
        ROLL DA REAÇÃO
     ========================= */
     const reactionRollData = rollDice(preset.diceFormula);
-    console.log("Dado puro", reactionRollData.total)
     const attributeValue = getAttributeValue(target, preset.attribute);
     const reactionModifier = attributeValue + (preset.modifier ?? 0);
     const reactionTotal = reactionRollData.total + reactionModifier;
-    console.log("Dado com atributo", reactionTotal)
     let reactionSuccess = false;
     let finalMessage = "";
 
@@ -100,7 +130,6 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     ========================= */
 
     if (reactionType === "COUNTER_ATTACK") {
-        console.log("Dado do ataque", attackRoll.total)
         reactionSuccess = reactionRollData.total >= attackRoll.total;
 
         if (reactionSuccess) {
@@ -110,7 +139,6 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             }
             const impactRoll = rollDice(preset.impactFormula);
             const counterDamage = impactRoll.total;
-              console.log("Dado do contra-ataque", impactRoll.total)
             await prisma.character.update({
                 where: { id: attacker.id },
                 data: {
@@ -134,7 +162,6 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
             finalMessage = `${target.name} falhou no contra-ataque (${reactionTotal} vs ${attackRoll.total}) e sofreu ${damage} de dano`;
         }
-
     } else {
 
         reactionSuccess = reactionTotal >= attackRoll.total;

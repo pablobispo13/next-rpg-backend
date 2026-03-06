@@ -183,8 +183,8 @@ model RollResult {
   characterId String    @db.ObjectId
   character   Character @relation(fields: [characterId], references: [id])
 
-  presetId String       @db.ObjectId
-  preset   ActionPreset @relation(fields: [presetId], references: [id])
+  presetId String?       @db.ObjectId
+  preset   ActionPreset? @relation(fields: [presetId], references: [id])
 
   combatId String? @db.ObjectId
   combat   Combat? @relation(fields: [combatId], references: [id])
