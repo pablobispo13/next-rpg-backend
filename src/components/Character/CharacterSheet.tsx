@@ -71,7 +71,7 @@ export function CharacterSheet({
       toast.error("Ocorreu um erro na requisição de obter o inventario")
     }
   }
-  async function getRollsResult() {
+  async function getActionLogs() {
     try {
       const res = await api.get(`/actionLogs/`, { params: { characterId: character.id } });
       setActionLogs(res.data.actionLogs);
@@ -86,7 +86,7 @@ export function CharacterSheet({
       getCharacter()
       getActionPreset()
       getInventory()
-      getRollsResult()
+      getActionLogs()
     } finally {
       setLoading(false)
     }
@@ -262,7 +262,7 @@ export function CharacterSheet({
           {/* Rolagens */}
           <Section title="Rolagens Recentes" action={
             !loading && canEdit && (
-              <IconButton size="small" onClick={() => getCharacter()}>
+              <IconButton size="small" onClick={() => getActionLogs()}>
                 <RefreshIcon />
               </IconButton>
             )
@@ -325,7 +325,7 @@ export function CharacterSheet({
         <InventoryItemModal
           open={inventoryOpen}
           onClose={() => {
-            getCharacter()
+            getInventory()
             setInventoryOpen(false)
             setItem(undefined)
           }
@@ -337,7 +337,7 @@ export function CharacterSheet({
         <PresetModal
           open={presetOpen}
           onClose={() => {
-            getCharacter()
+            getActionPreset()
             setPresetOpen(false)
             setPreset(undefined)
           }}
