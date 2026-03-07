@@ -196,9 +196,14 @@ export function CharacterSheet({
                       }
                       }
                     >
+                      <Stack display={"flex"} flexDirection={"column"} alignItems={"flex-start"}>
+                        <Stack display={"flex"} flexDirection={"row"} alignItems={"center"}>
+                          {item.name}{" "}
+                          {item.quantity > 1 && `x${item.quantity}`}
+                        </Stack>
+                        <>Descrição: {item.description}</>
+                      </Stack>
 
-                      {item.name}{" "}
-                      {item.quantity > 1 && `x${item.quantity}`}
                     </SimpleListItem>
                   ))
                 ) : (
@@ -285,7 +290,6 @@ export function CharacterSheet({
                               <Typography> {actionLog.message}</Typography>
                               {actionLog.roll?.preset && actionLog.roll ?
                                 <Typography>Dados: {actionLog.roll?.preset.diceFormula}
-
                                   {(character as any)[actionLog.roll?.preset.attribute.toLowerCase() || 0] !== 0/* eslint-disable  @typescript-eslint/no-explicit-any */
                                     ? " + " + (character as any)[actionLog.roll?.preset.attribute.toLowerCase() || ""] + " (" + actionLog.roll?.preset.attribute + ")"/* eslint-disable  @typescript-eslint/no-explicit-any */
                                     : undefined
