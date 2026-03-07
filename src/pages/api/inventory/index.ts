@@ -1,6 +1,6 @@
 import type { NextApiResponse } from "next";
-import { prisma } from "../../lib/prisma";
-import { authenticate, AuthenticatedRequest } from "../../lib/auth";
+import { authenticate, AuthenticatedRequest } from "../../../lib/auth";
+import { prisma } from "../../../lib/prisma";
 
 type InventoryBody = {
     action: "list" | "add" | "update" | "delete";
@@ -39,7 +39,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
             const items = await prisma.inventory.findMany({
                 where: { characterId },
-                include: { preset: true }, // inclui detalhes do preset, se houver
+                orderBy: { name: "asc" }
             });
 
             return res.status(200).json({ items });

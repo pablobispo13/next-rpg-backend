@@ -319,7 +319,6 @@ export function CombatProvider({
     async function endTurn() {
         if (!combat || !isMyTurn) return;
         if (pendingReactionRoll) return;
-        if (!actionUsed) return;
 
         try {
             await api.post("/combat/control", {

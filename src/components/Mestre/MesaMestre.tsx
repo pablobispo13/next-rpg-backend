@@ -209,9 +209,6 @@ export default function MesaMestre() {
             /></CombatProvider>
         </Stack>
       </Box>
-
-      {/* ================= LATERAL - TESTES RECENTES ================= */}
-
       <Box
         sx={{
           borderLeft: "1px solid #333",

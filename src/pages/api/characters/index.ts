@@ -42,22 +42,9 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
           orderBy: { name: "asc" },
           include: {
             owner: true,
-            presets: {
-              orderBy: { name: "asc" },
-              include: {
-                characterEffects: true,
-                dodgeCharacters: true,
-                blockCharacters: true,
-                counterAttackCharacters: true,
-                rolls: true,
-                inventories: true,
-              },
-            },
-            inventory: { orderBy: { name: "desc" } },
             dodgePreset: true,
             blockPreset: true,
             counterAttackPreset: true,
-            actionLogs: { take: 10, orderBy: { createdAt: "desc" }, include: { roll: { include: { preset: true } }, character: true, target: true } },
             targetLogs: true,
             combatParticipants: true,
             turns: true,

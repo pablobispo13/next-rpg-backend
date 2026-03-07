@@ -74,10 +74,7 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
 
   const canUseActions = canAct;
 
-  const canEndTurn =
-    isMyTurn &&
-    actionUsed &&
-    !pendingReactionRoll;
+  const canEndTurn = isMyTurn && !pendingReactionRoll;
 
   return (
     <Box
@@ -301,13 +298,6 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
               Ação principal já utilizada neste turno
             </Typography>
           )}
-
-          {!actionUsed && canAct && (
-            <Typography fontSize={12} color="#ff9800">
-              Você deve usar uma ação principal antes de passar o turno
-            </Typography>
-          )}
-
           <Stack direction="row" spacing={2} flexWrap="wrap">
             {activeCharacter.presets?.map(
               (preset: ActionPresetType) => {
@@ -375,7 +365,7 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
                 p.targetType !== "SELF"
             ) && (
               <Typography fontSize={12} color="#ff9800">
-                Selecione um alvo
+                Selecione um alvo ou passe a rodada.
               </Typography>
             )}
         </Stack>

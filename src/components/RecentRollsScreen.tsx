@@ -165,7 +165,7 @@ export default function RecentRollsScreen() {
                                             </Box>
 
                                             {/* Resultado */}
-                                            {roll.success &&
+                                            {roll.success && roll.preset.type != "TEST" && (roll.preset.type === "REACT" && (roll.combatId || roll.turnId)) &&
                                                 <Typography
                                                     fontWeight="bold"
                                                     color={roll.success ? "#66bb6a" : "#ef5350"}
@@ -176,7 +176,7 @@ export default function RecentRollsScreen() {
 
                                             {/* Dano */}
                                             {roll.damage !== null && (
-                                                <Typography color="#ff7043" fontWeight="bold">
+                                                <Typography color="#b94927" fontWeight="bold">
                                                     💥 Dano: {roll.damage}
                                                 </Typography>
                                             )}
@@ -191,7 +191,7 @@ export default function RecentRollsScreen() {
                                             {/* Reação */}
                                             {roll.preset && roll.preset.type === "REACT" && roll.combatId != null && roll.turnId != null && (
                                                 <Typography fontSize={12} color="#90caf9">
-                                                    ⚡ Reação {String(roll.reacted)}{roll.reacted ? "executada" : "pendente"}
+                                                    ⚡ Reação {roll.reacted ? "executada" : "pendente"}
                                                 </Typography>
                                             )}
 

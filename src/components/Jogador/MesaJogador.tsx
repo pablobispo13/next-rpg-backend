@@ -45,7 +45,7 @@ export default function MesaJogador({ forcedCharacterId, isSpectator = false }: 
 
   if (loadingCharacter) return <>Carregando...</>
   if (!character) {
-    return <Stack display={"flex"} flexDirection={"row"} gap={2} alignItems={"center"}>
+    return <Stack display={"flex"} height={"calc(100vh - 64px)"} justifyContent={"center"} flexDirection={"row"} gap={2} alignItems={"center"}>
       <Button variant="outlined" onClick={() => createCharacterTemplate().finally(() => getCharacters())}>
         Criar personagem de template
       </Button>

@@ -18,7 +18,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
     const presets = await prisma.actionPreset.findMany({
       where: { characterId },
-      orderBy: { name: "desc" },
+      orderBy: { name: "asc" },
       include: {
         characterEffects: true,
         dodgeCharacters: true,
@@ -26,8 +26,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         counterAttackCharacters: true,
         rolls: true,
         inventories: true,
-        character: true
       },
+
     });
 
     res.status(200).json({ presets });
@@ -104,7 +104,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       },
     });
 
-   
+
     res.status(201).json(preset);
     return;
   }
