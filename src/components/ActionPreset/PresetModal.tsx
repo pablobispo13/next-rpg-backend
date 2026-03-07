@@ -142,7 +142,10 @@ export function PresetModal({
                 <Stack spacing={2} sx={{ mt: 1 }}>
                     {/* Básico */}
                     <TextField label="Nome" value={form.name} onChange={e => update("name", e.target.value)} />
-                    <TextField label="Descrição" value={form.description} onChange={e => update("description", e.target.value)} />
+                    <TextField label="Descrição"
+                        multiline
+                        rows={4}
+                        value={form.description} onChange={e => update("description", e.target.value)} />
 
                     <Stack direction="row" spacing={2}>
                         <TextField select label="Tipo" value={form.type} onChange={e => update("type", e.target.value)} fullWidth>

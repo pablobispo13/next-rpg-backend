@@ -236,13 +236,14 @@ export function CharacterSheet({
                       }}
                       buttonAction={preset.type !== "REACT" && <Roller actionPresetId={preset.id} characterId={character.id} />}
                     >
-                      <Stack display={"flex"} flexDirection={"row"} alignItems={"center"}>
-                        <>
+                      <Stack display={"flex"} flexDirection={"column"} alignItems={"flex-start"}>
+                        <Stack display={"flex"} flexDirection={"row"} alignItems={"center"}>
                           <strong>{preset.name}</strong> —{" "}
                           {preset.diceFormula}  {/* eslint-disable  @typescript-eslint/no-explicit-any */}
                           {(character as any)[preset.attribute.toLowerCase()] > 0 ? " + " + (character as any)[preset.attribute.toLowerCase()] + " (" + preset.attribute + ")"/* eslint-disable  @typescript-eslint/no-explicit-any */
                             : undefined}{preset.modifier ? " + " + preset.modifier : undefined}
-                        </>
+                        </Stack>
+                        <>Descrição: {preset.description}</>
                       </Stack>
                     </SimpleListItem>
                   ))
