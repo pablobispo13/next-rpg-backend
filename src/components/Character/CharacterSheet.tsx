@@ -239,7 +239,8 @@ export function CharacterSheet({
                         setPresetOpen(true)
                         setPreset(preset)
                       }}
-                      buttonAction={preset.type !== "REACT" && <Roller actionPresetId={preset.id} characterId={character.id} />}
+                      presetType={preset.type}
+                      buttonAction={preset.type !== "REACT" && preset.type !== "SKILL" && <Roller actionPresetId={preset.id} characterId={character.id} />}
                     >
                       <Stack display={"flex"} flexDirection={"column"} alignItems={"flex-start"}>
                         <Stack display={"flex"} flexDirection={"row"} alignItems={"center"}>

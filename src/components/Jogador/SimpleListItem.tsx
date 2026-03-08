@@ -6,21 +6,31 @@ type Props = {
     children: React.ReactNode;
     editable?: boolean;
     buttonAction?: React.ReactNode
+    presetType?: "SKILL" | "ATTACK" | "TEST" | "REACT" | "SUPPORT"
     onEdit?: () => void;
     onDelete?: () => void;
+};
+
+const presetColors = {
+    ATTACK: "#2e1f1f",
+    SKILL: "#948451",
+    TEST: "#6D6D6D",
+    REACT: "#206461",
+    SUPPORT: "#2E7D32",
 };
 
 export function SimpleListItem({
     children,
     buttonAction = <></>,
     editable = false,
+    presetType,
     onEdit,
     onDelete,
 }: Props) {
     return (
         <Box
             sx={{
-                backgroundColor: "#2e2e4d", p: 1, borderRadius: 1,
+                backgroundColor: presetType ? presetColors[presetType] : "#2e2e4d", p: 1, borderRadius: 1,
             }}
         >
             <Stack

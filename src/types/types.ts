@@ -50,7 +50,7 @@ export type ActionPresetType = {
     id: string;
     name: string;
     description?: string | null;
-    type: string;
+    type: "SKILL" | "ATTACK" | "TEST" | "REACT" | "SUPPORT";
     targetType: string;
     diceFormula: string;
     impactFormula: string
