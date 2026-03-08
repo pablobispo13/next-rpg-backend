@@ -21,6 +21,10 @@ enum ActionType {
   TEST
   SKILL
   REACT
+  SPELL
+  HEAL
+  BUFF
+  DEBUFF
   SUPPORT
 }
 
