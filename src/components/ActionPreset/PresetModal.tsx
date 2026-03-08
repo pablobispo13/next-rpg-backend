@@ -90,10 +90,8 @@ export function PresetModal({
                 statusApplied: form.statusApplied ? Number(form.statusApplied) : null,
                 characterId,
             });
-
-
         }
-        else
+        else {
             await api.post(`/actionPreset`, {
                 ...form,
                 modifier: Number(form.modifier),
@@ -105,7 +103,26 @@ export function PresetModal({
                 statusApplied: form.statusApplied ? Number(form.statusApplied) : null,
                 characterId,
             });
-
+        }
+        setForm({
+            name: "",
+            description: "",
+            type: "ATTACK",
+            targetType: "ENEMY",
+            attribute: "STRENGTH",
+            diceFormula: "1d20",
+            impactFormula: "",
+            modifier: 0,
+            critThreshold: 20,
+            critMultiplier: 2,
+            requiresTurn: true,
+            allowOutOfCombat: false,
+            appliesEffect: false,
+            durationTurns: "",
+            statAffected: "",
+            effectAmount: "",
+            statusApplied: "",
+        })
         onClose();
     };
 
