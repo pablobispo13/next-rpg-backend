@@ -19,6 +19,7 @@ enum Role {
 enum ActionType {
   ATTACK
   TEST
+  SKILL
   REACT
   SPELL
   HEAL
