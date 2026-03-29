@@ -19,7 +19,6 @@ import api from "../../lib/api";
 import { useRouter } from "next/router";
 import { ActionPresetType } from "../../types/types";
 import { CombatTimeline } from "./CombatTimeline";
-import { useState } from "react";
 import { DiceInputRoller } from "../DiceInputRoller";
 
 type CombatScreenProps = { combatId: string };
@@ -306,6 +305,8 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
 
                 if (
                   preset.type === "TEST" ||
+                  preset.type === "SKILL" ||
+                  preset.type === "SUPPORT" ||
                   preset.type === "REACT"
                 )
                   return null;
