@@ -149,7 +149,7 @@ export default function MesaMestre() {
                   <Typography variant="h5" fontWeight="bold">
                     Jogadores
                   </Typography>
-                  <Stack gap={2} display={"flex"} flexDirection={"row"}>
+                  <Stack gap={2} display={"flex"} flexDirection={"row"} flexWrap="wrap" >
                     {players.map((char) => (
                       <CharacterCard
                         key={char.id}
@@ -180,7 +180,7 @@ export default function MesaMestre() {
                       Criar personagem de template
                     </Button>
                   </Stack>
-                  <Stack gap={2} display={"flex"} flexDirection={"row"}>
+                  <Stack gap={2} display={"flex"} flexDirection={"row"} flexWrap="wrap" >
                     {enemies.map((char) => (
                       <CharacterCard
                         key={char.id}

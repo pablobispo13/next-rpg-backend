@@ -16,7 +16,6 @@ export default function Layout({ children }: LayoutProps) {
     <div className="min-h-screen flex flex-col">
       <AppBar position="static">
         <Toolbar sx={{ display: "flex", justifyContent: "flex-end" }}>
-          <ButtonTheme />
           {user && <Button color="inherit" onClick={() => logout("manual")}>Logout</Button>}
         </Toolbar>
       </AppBar>
