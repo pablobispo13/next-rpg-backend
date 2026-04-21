@@ -19,6 +19,7 @@ import { PresetModal } from "../ActionPreset/PresetModal";
 import { DiceInputRoller } from "../DiceInputRoller";
 import { toast } from "react-toastify";
 import { CombatCard } from "../Combat/CombatCard";
+import Head from "next/head";
 
 
 type Props = {
@@ -94,7 +95,9 @@ export function CharacterSheet({
 
   return (
     <Stack gap={2}>
-
+      <Head>
+        <title>Ficha {character.name}</title>
+      </Head>
       {!isMasterView &&
         <Paper elevation={6} sx={{ p: 3, gap: 3, marginTop: 2 }}>
           <Stack gap={3}>

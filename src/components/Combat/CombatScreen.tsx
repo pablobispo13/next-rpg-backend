@@ -20,6 +20,7 @@ import { useRouter } from "next/router";
 import { ActionPresetType } from "../../types/types";
 import { CombatTimeline } from "./CombatTimeline";
 import { DiceInputRoller } from "../DiceInputRoller";
+import Head from "next/head";
 
 type CombatScreenProps = { combatId: string };
 
@@ -86,6 +87,9 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
         overflow: "hidden",
       }}
     >
+      <Head>
+        <title>Tela de combate</title>
+      </Head>
       {/* ================= HEADER ================= */}
       <Box
         sx={{

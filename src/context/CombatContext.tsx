@@ -257,13 +257,24 @@ export function CombatProvider({
         if (pendingReactionRoll) return;
 
         try {
+            if (!activeTurnIdRef.current && activeTurn?.id) {
+                activeTurnIdRef.current = activeTurn.id;
+            }
+
+            const turnId = activeTurnIdRef.current;
+
+            if (!turnId) {
+                console.warn("turnId não disponível no momento da ação");
+                return;
+            }
+
             optimisticActionRef.current = true;
-            setActionUsed(true); // 🔒 trava UI imediatamente
+            setActionUsed(true);
 
             await api.post("/roll", {
                 actionPresetId: presetId,
                 combatId: combat.id,
-                turnId: activeTurn?.id ?? null,
+                turnId, // ✅ agora estável
                 targetIds,
                 characterId,
             });

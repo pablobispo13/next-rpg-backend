@@ -24,6 +24,7 @@ import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import { CombatProvider } from "../../context/CombatContext";
 import { CharacterCard } from "../Character/CharacterCard";
 import RecentRollsScreen from "../RecentRollsScreen";
+import Head from "next/head";
 
 export default function MesaMestre() {
   const [characters, setCharacters] = useState<Character[]>([]);
@@ -51,6 +52,7 @@ export default function MesaMestre() {
   const enemies = characters.filter((c) => c.owner?.role === "MESTRE");
 
   return (
+
     <Box
       sx={{
         display: "grid",
@@ -60,6 +62,9 @@ export default function MesaMestre() {
         overflow: "hidden",
       }}
     >
+      <Head>
+        <title>Mesa Mestre</title>
+      </Head>
       {/* ================= COLUNA PRINCIPAL ================= */}
       <Box sx={{ overflow: "auto", pr: 1 }}>
         <Stack gap={2}>
