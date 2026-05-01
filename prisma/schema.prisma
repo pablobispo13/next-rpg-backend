@@ -92,19 +92,19 @@ model Character {
   id   String @id @default(auto()) @map("_id") @db.ObjectId
   name String
 
-  life    Int
-  maxLife Int
-  xp      Int
-
+  life      Int
+  maxLife   Int
+  xp        Int
   strength  Int
   agility   Int
   vigor     Int
   intellect Int
   presence  Int
 
-  baseDefense Int     @default(0)
-  history     String?
-  notes     String?
+  baseDefense   Int           @default(0)
+  history       String?
+  notes         String?
+  image         String?
   // Presets automáticos de defesa
   dodgePresetId String?       @db.ObjectId
   dodgePreset   ActionPreset? @relation("DodgePreset", fields: [dodgePresetId], references: [id], onDelete: NoAction, onUpdate: NoAction)

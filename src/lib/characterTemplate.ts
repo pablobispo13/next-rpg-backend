@@ -150,6 +150,7 @@ export async function createCharacterTemplate(): Promise<any> {
     baseDefense: 0,
     history: "",
     notes: "",
+    image: "",
     strength: 0,
     agility: 0,
     vigor: 0,

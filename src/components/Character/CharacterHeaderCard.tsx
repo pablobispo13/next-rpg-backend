@@ -10,11 +10,12 @@ import {
   Skeleton,
   Chip,
   Divider,
+  Avatar,
 } from "@mui/material";
 import { Character } from "../../types/types";
-import PersonIcon from "@mui/icons-material/Person";
 import EditIcon from "@mui/icons-material/Edit";
 import ShieldIcon from "@mui/icons-material/Shield";
+import { deepOrange } from "@mui/material/colors";
 
 type Props = {
   character: Character;
@@ -61,22 +62,25 @@ export function CharacterHeaderCard({
               <Box
                 sx={{
                   fontSize: { xs: "1.5rem", sm: "2rem" },
-                  width: { xs: 40, sm: 48 },
-                  height: { xs: 40, sm: 48 },
+                  width: { xs: 60, sm: 120 },
+                  height: { xs: 60, sm: 120 },
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: "rgba(107, 122, 219, 0.2)",
+                  backgroundColor: deepOrange["A400"],
                   borderRadius: 1,
-                  border: "1px solid rgba(107, 122, 219, 0.4)",
+                  border: "1px solid "+ deepOrange["800"],
                   flexShrink: 0,
                 }}
               >
-                <PersonIcon
+                <Avatar
                   sx={{
-                    fontSize: { xs: "1rem", sm: "1.5rem" },
-                    color: "#6B7ADB",
+                    bgcolor: deepOrange["A400"],
+                    width: "96%",
+                    height: "96%",
                   }}
+                  variant="square"
+                  src={"/characters/" + character.image}
                 />
               </Box>
 

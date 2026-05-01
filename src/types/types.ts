@@ -2,6 +2,7 @@ export type Character = {
     // Identidade
     id: string;
     name: string;
+    image: string;
     baseDefense: number
     // Controle
     owner?: CharacterOwner;
