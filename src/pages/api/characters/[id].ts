@@ -2,7 +2,6 @@ import { NextApiResponse } from "next";
 import { authenticate, AuthenticatedRequest } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 
-
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   const { id } = req.query;
   const user = req.user!;
@@ -87,13 +86,47 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         targetLogs: true,
         combatParticipants: true,
         turns: true,
-        rollResults: { include: { preset: true, logs: true, } },
+        rollResults: { include: { preset: true, logs: true } },
         statusEffects: true,
       },
     });
 
-
     res.status(200).json(updated);
+    return;
+  }
+
+  // REMOÇÃO
+  if (req.method === "DELETE") {
+    // Validar se tem combates ativos
+    const activeCombats = await prisma.combatParticipant.findMany({
+      where: { characterId: id },
+      include: { combat: true },
+    });
+
+    const hasActiveCombat = activeCombats.some((cp) => cp.combat.active);
+    if (hasActiveCombat) {
+      return res.status(409).json({
+        message: "Não é possível remover personagem em combate ativo",
+      });
+    }
+
+    // Limpar relações antes de deletar
+    await prisma.character.update({
+      where: { id },
+      data: {
+        dodgePresetId: null,
+        blockPresetId: null,
+        counterAttackPresetId: null,
+      },
+    });
+
+    // Deletar personagem (cascata remove inventário, presets, logs)
+    await prisma.actionPreset.deleteMany({ where: { characterId: id } });
+    await prisma.combatParticipant.deleteMany({ where: { characterId: id } });
+    await prisma.combatTurn.deleteMany({ where: { characterId: id } });
+    await prisma.rollResult.deleteMany({ where: { characterId: id } });
+    await prisma.character.delete({ where: { id } });
+    res.status(204).end();
     return;
   }
 

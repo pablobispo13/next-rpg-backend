@@ -20,7 +20,7 @@ import { ActionPresetType } from "../../types/types";
 type Props = {
     open: boolean;
     characterId: string;
-    preset?: ActionPresetType;
+    preset?: ActionPresetType | null;
     onClose: () => void;
 };
 
@@ -59,7 +59,7 @@ export function PresetModal({
                 targetType: preset.targetType,
                 attribute: preset.attribute,
                 diceFormula: preset.diceFormula,
-                impactFormula: preset.impactFormula,
+                impactFormula: preset.impactFormula ?? "",
                 modifier: preset.modifier ?? 0,
                 critThreshold: preset.critThreshold ?? 20,
                 critMultiplier: preset.critMultiplier ?? 2,
@@ -74,7 +74,7 @@ export function PresetModal({
         }
     }, [preset, open]);
 
-    const update = (key: string, value: any) =>/* eslint-disable  @typescript-eslint/no-explicit-any */
+    const update = (key: string, value: string | number | boolean) =>
         setForm((prev) => ({ ...prev, [key]: value }));
 
     const handleSave = async () => {
