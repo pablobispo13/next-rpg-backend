@@ -2,7 +2,6 @@ import { NextApiResponse } from "next";
 import { authenticate, AuthenticatedRequest } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 
-
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   const user = req.user!;
 
@@ -11,47 +10,55 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     const characters =
       user.role === "MESTRE"
         ? await prisma.character.findMany({
-          orderBy: { name: "asc" },
-          include: {
-            owner: true,
-            presets: {
-              orderBy: { name: "asc" },
-              include: {
-                characterEffects: true,
-                dodgeCharacters: true,
-                blockCharacters: true,
-                counterAttackCharacters: true,
-                rolls: true,
-                inventories: true,
+            orderBy: { name: "asc" },
+            include: {
+              owner: true,
+              presets: {
+                orderBy: { name: "asc" },
+                include: {
+                  characterEffects: true,
+                  dodgeCharacters: true,
+                  blockCharacters: true,
+                  counterAttackCharacters: true,
+                  rolls: true,
+                  inventories: true,
+                },
               },
+              inventory: { orderBy: { name: "desc" } },
+              dodgePreset: true,
+              blockPreset: true,
+              counterAttackPreset: true,
+              actionLogs: {
+                take: 10,
+                orderBy: { createdAt: "desc" },
+                include: {
+                  roll: { include: { preset: true } },
+                  character: true,
+                  target: true,
+                },
+              },
+              targetLogs: true,
+              combatParticipants: true,
+              turns: true,
+              rollResults: { include: { preset: true, logs: true } },
+              statusEffects: true,
             },
-            inventory: { orderBy: { name: "desc" } },
-            dodgePreset: true,
-            blockPreset: true,
-            counterAttackPreset: true,
-            actionLogs: { take: 10, orderBy: { createdAt: "desc" }, include: { roll: { include: { preset: true } }, character: true, target: true } },
-            targetLogs: true,
-            combatParticipants: true,
-            turns: true,
-            rollResults: { include: { preset: true, logs: true, } },
-            statusEffects: true,
-          },
-        })
+          })
         : await prisma.character.findMany({
-          where: { ownerId: user.userId },
-          orderBy: { name: "asc" },
-          include: {
-            owner: true,
-            dodgePreset: true,
-            blockPreset: true,
-            counterAttackPreset: true,
-            targetLogs: true,
-            combatParticipants: true,
-            turns: true,
-            rollResults: { include: { preset: true, logs: true, } },
-            statusEffects: true,
-          },
-        });
+            where: { ownerId: user.userId },
+            orderBy: { name: "asc" },
+            include: {
+              owner: true,
+              dodgePreset: true,
+              blockPreset: true,
+              counterAttackPreset: true,
+              targetLogs: true,
+              combatParticipants: true,
+              turns: true,
+              rollResults: { include: { preset: true, logs: true } },
+              statusEffects: true,
+            },
+          });
 
     res.status(200).json({ characters });
     return;
@@ -81,6 +88,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       presence,
       baseDefense,
       history,
+      notes,
       dodgePresetId,
       blockPresetId,
       counterAttackPresetId,
@@ -99,6 +107,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         presence: presence ?? 10,
         baseDefense: baseDefense ?? 0,
         history: history ?? "",
+        notes: notes ?? "",
         ownerId: user.userId,
         dodgePresetId: dodgePresetId ?? null,
         blockPresetId: blockPresetId ?? null,
@@ -121,15 +130,22 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         dodgePreset: true,
         blockPreset: true,
         counterAttackPreset: true,
-        actionLogs: { take: 10, orderBy: { createdAt: "desc" }, include: { roll: { include: { preset: true } }, character: true, target: true } },
+        actionLogs: {
+          take: 10,
+          orderBy: { createdAt: "desc" },
+          include: {
+            roll: { include: { preset: true } },
+            character: true,
+            target: true,
+          },
+        },
         targetLogs: true,
         combatParticipants: true,
         turns: true,
-        rollResults: { include: { preset: true, logs: true, } },
+        rollResults: { include: { preset: true, logs: true } },
         statusEffects: true,
       },
     });
-
 
     res.status(201).json(character);
     return;

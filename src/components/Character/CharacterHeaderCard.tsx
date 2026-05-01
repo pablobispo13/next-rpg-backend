@@ -179,6 +179,30 @@ export function CharacterHeaderCard({
               </Typography>
             </Box>
           )}
+          {character.notes && !loading && (
+            <Box>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                display="block"
+                mb={0.5}
+              >
+                Anotações:
+              </Typography>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{
+                  display: "-webkit-box",
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: "vertical",
+                  overflow: "hidden",
+                }}
+              >
+                {character.notes}
+              </Typography>
+            </Box>
+          )}
         </Stack>
       </CardContent>
     </Card>

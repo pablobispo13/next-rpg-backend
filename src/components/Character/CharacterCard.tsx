@@ -118,6 +118,34 @@ export function CharacterCard({
               </Box>
             </>
           )}
+          {character.notes && (
+            <>
+              <Divider sx={{ my: 1, borderColor: "rgba(51, 51, 51, 0.5)" }} />
+              <Box>
+                <Typography
+                  fontSize={11}
+                  color="#aaa"
+                  fontWeight="bold"
+                  mb={0.5}
+                >
+                  Anotações
+                </Typography>
+                <Typography
+                  fontSize={11}
+                  color="#999"
+                  sx={{
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    display: "-webkit-box",
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: "vertical",
+                  }}
+                >
+                  {character.notes}
+                </Typography>
+              </Box>
+            </>
+          )}
         </Stack>
       </CardContent>
       <CardActions sx={{ pt: 0, gap: 1 }}>

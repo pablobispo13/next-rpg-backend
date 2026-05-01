@@ -6,6 +6,7 @@ export type Character = {
     // Controle
     owner?: CharacterOwner;
     history?: string
+    notes?: string
 
     // Recursos
     life: number;

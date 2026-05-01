@@ -104,7 +104,7 @@ model Character {
 
   baseDefense Int     @default(0)
   history     String?
-
+  notes     String?
   // Presets automáticos de defesa
   dodgePresetId String?       @db.ObjectId
   dodgePreset   ActionPreset? @relation("DodgePreset", fields: [dodgePresetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
