@@ -9,10 +9,13 @@ import {
   Button,
   Stack,
   Divider,
+  Box,
+  Typography,
 } from "@mui/material";
 import { useEffect, useState } from "react";
 import api from "../../lib/api";
 import { Character } from "../../types/types";
+import { calculateMaxLife, calculateDefense } from "../../lib/characterCalculations";
 
 type Props = {
   open: boolean;
@@ -57,8 +60,18 @@ export function CharacterStatsModal({
     }
   }, [character, open]);
 
-  const update = (key: string, value: any) =>/* eslint-disable  @typescript-eslint/no-explicit-any */
+  const update = (key: string, value: number | string | boolean) =>
     setForm((prev) => ({ ...prev, [key]: value }));
+
+  const autoCalculateMaxLife = () => {
+    const newMaxLife = calculateMaxLife(Number(form.strength), Number(form.vigor));
+    update("maxLife", newMaxLife);
+  };
+
+  const autoCalculateDefense = () => {
+    const newDefense = calculateDefense(Number(form.agility), Number(form.vigor));
+    update("baseDefense", newDefense);
+  };
 
   const handleSave = async () => {
     if (form.life > form.maxLife) {
@@ -115,30 +128,57 @@ export function CharacterStatsModal({
 
           <Divider />
 
-          <Stack direction="row" spacing={2}>
-            <TextField
-              label="Vida Atual"
-              type="number"
-              value={form.life}
-              onChange={(e) => update("life", e.target.value)}
-              fullWidth
-            />
-            <TextField
-              label="Vida Máxima"
-              type="number"
-              value={form.maxLife}
-              onChange={(e) => update("maxLife", e.target.value)}
-              fullWidth
-            />
-          </Stack>
+          <Box>
+            <Stack direction="row" spacing={1} alignItems="center" mb={1}>
+              <Typography variant="caption" fontWeight="bold">Vida</Typography>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={autoCalculateMaxLife}
+                sx={{ textTransform: "none", fontSize: "0.75rem" }}
+              >
+                Auto: 25 + (For×2) + (Vig×3)
+              </Button>
+            </Stack>
+            <Stack direction="row" spacing={2}>
+              <TextField
+                label="Vida Atual"
+                type="number"
+                value={form.life}
+                onChange={(e) => update("life", e.target.value)}
+                fullWidth
+              />
+              <TextField
+                label="Vida Máxima"
+                type="number"
+                value={form.maxLife}
+                onChange={(e) => update("maxLife", e.target.value)}
+                fullWidth
+              />
+            </Stack>
+          </Box>
           <Divider />
 
-          <TextField
-            label="Defesa Base"
-            type="number"
-            value={form.baseDefense}
-            onChange={(e) => update("baseDefense", e.target.value)}
-          />
+          <Box>
+            <Stack direction="row" spacing={1} alignItems="center" mb={1}>
+              <Typography variant="caption" fontWeight="bold">Defesa</Typography>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={autoCalculateDefense}
+                sx={{ textTransform: "none", fontSize: "0.75rem" }}
+              >
+                Auto: 3 + (Agi + Vig)
+              </Button>
+            </Stack>
+            <TextField
+              label="Defesa Base"
+              type="number"
+              value={form.baseDefense}
+              onChange={(e) => update("baseDefense", e.target.value)}
+              fullWidth
+            />
+          </Box>
 
           <Divider />
 

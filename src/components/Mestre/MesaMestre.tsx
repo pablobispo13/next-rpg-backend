@@ -56,10 +56,11 @@ export default function MesaMestre() {
     <Box
       sx={{
         display: "grid",
-        gridTemplateColumns: "1fr 400px",
+        gridTemplateColumns: "1fr 380px",
         gap: 2,
         height: "100vh",
         overflow: "hidden",
+        background: "#0e0e1a",
       }}
     >
       <Head>
@@ -70,12 +71,16 @@ export default function MesaMestre() {
         <Stack gap={2}>
           {/* COMBATES */}
           {/* COMBATES */}
-          <Paper elevation={6} sx={{ p: 3 }}>
+          <Paper elevation={6} sx={{
+            p: 3,
+            background: "linear-gradient(135deg, rgba(28, 28, 46, 0.6) 0%, rgba(14, 14, 26, 0.9) 100%)",
+            border: "1px solid rgba(107, 122, 219, 0.2)",
+          }}>
             <Stack gap={3}>
               {/* Header */}
               <Stack direction="row" justifyContent="space-between" alignItems="center">
-                <Typography variant="h5" fontWeight="bold">
-                  Combates Ativos
+                <Typography variant="h5" fontWeight="bold" sx={{ fontSize: "1.3rem", letterSpacing: 0.5 }}>
+                  ⚔️ Combates Ativos
                 </Typography>
 
                 <Button
@@ -99,17 +104,24 @@ export default function MesaMestre() {
                       <Card
                         sx={{
                           height: "100%",
-                          background: "linear-gradient(145deg, #1c1c2e, #23233a)",
-                          border: "1px solid #333",
+                          background: "linear-gradient(135deg, rgba(42, 42, 85, 0.5) 0%, rgba(28, 28, 46, 0.7) 100%)",
+                          border: "2px solid rgba(79, 195, 247, 0.3)",
+                          transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                          cursor: "pointer",
+                          "&:hover": {
+                            border: "2px solid rgba(79, 195, 247, 0.8)",
+                            boxShadow: "0 0 20px rgba(79, 195, 247, 0.4)",
+                            transform: "translateY(-4px)",
+                          },
                         }}
                       >
                         <CardContent>
                           <Stack gap={1}>
-                            <Typography variant="h6">
-                              {`Combate`}
+                            <Typography variant="h6" fontWeight="bold">
+                              {`Combate #${c.id.slice(0, 8)}`}
                             </Typography>
 
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.85rem" }}>
                               ID: {c.id}
                             </Typography>
 
@@ -147,12 +159,22 @@ export default function MesaMestre() {
           </Paper>
 
           {/* PERSONAGENS */}
-          <Paper elevation={8} sx={{ p: 2, gap: 6 }}>
+          <Paper elevation={8} sx={{
+            p: 2,
+            gap: 6,
+            background: "linear-gradient(135deg, rgba(28, 28, 46, 0.6) 0%, rgba(14, 14, 26, 0.9) 100%)",
+            border: "1px solid rgba(107, 122, 219, 0.2)",
+          }}>
             <Stack gap={3}>
-              <Paper elevation={12} sx={{ p: 2, gap: 6 }}>
+              <Paper elevation={12} sx={{
+                p: 2,
+                gap: 6,
+                background: "rgba(28, 28, 46, 0.4)",
+                border: "1px solid rgba(102, 187, 106, 0.2)",
+              }}>
                 <Stack gap={3}>
-                  <Typography variant="h5" fontWeight="bold">
-                    Jogadores
+                  <Typography variant="h5" fontWeight="bold" sx={{ fontSize: "1.2rem", letterSpacing: 0.5, color: "#66bb6a" }}>
+                    👥 Jogadores
                   </Typography>
                   <Stack gap={2} display={"flex"} flexDirection={"row"} flexWrap="wrap" >
                     {players.map((char) => (
@@ -166,16 +188,22 @@ export default function MesaMestre() {
                             "noopener,noreferrer"
                           )
                         }}
+                        onDelete={() => fetchCharacters()}
                       />
                     ))}
                   </Stack>
                 </Stack>
               </Paper>
-              <Paper elevation={12} sx={{ p: 2, gap: 6 }}>
+              <Paper elevation={12} sx={{
+                p: 2,
+                gap: 6,
+                background: "rgba(42, 42, 85, 0.3)",
+                border: "1px solid rgba(239, 83, 80, 0.2)",
+              }}>
                 <Stack gap={3}>
                   <Stack direction="row" justifyContent="space-between" alignItems="center">
-                    <Typography variant="h5" fontWeight="bold">
-                      Inimigos
+                    <Typography variant="h5" fontWeight="bold" sx={{ fontSize: "1.2rem", letterSpacing: 0.5, color: "#ef5350" }}>
+                      ⚔️ Inimigos
                     </Typography>
 
                     <Button
@@ -197,6 +225,7 @@ export default function MesaMestre() {
                             "noopener,noreferrer"
                           )
                         }}
+                        onDelete={() => fetchCharacters()}
                       />
                     ))}
                   </Stack>
@@ -216,10 +245,11 @@ export default function MesaMestre() {
       </Box>
       <Box
         sx={{
-          borderLeft: "1px solid #333",
-          backgroundColor: "#111122",
+          borderLeft: "1px solid rgba(107, 122, 219, 0.2)",
+          backgroundColor: "rgba(14, 14, 26, 0.8)",
           p: 2,
           overflow: "auto",
+          background: "linear-gradient(135deg, rgba(28, 28, 46, 0.6) 0%, rgba(14, 14, 26, 0.9) 100%)",
         }}
       >
         <RecentRollsScreen />

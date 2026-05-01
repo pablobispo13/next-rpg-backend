@@ -1,58 +1,99 @@
 "use client";
 
-import { Stack, Button } from "@mui/material";
+import { Stack, Button, Skeleton } from "@mui/material";
 import { useState } from "react";
 import { ActionPreset } from "@prisma/client";
-import { PresetRow } from "./PresetRow";
+import { PresetCard } from "./PresetCard";
 import { Section } from "../Section";
 import { PresetModal } from "./PresetModal";
+import { SimpleListItem } from "../Jogador/SimpleListItem";
 
 type Props = {
-    characterId: string;
-    presets: ActionPreset[];
-    canEdit?: boolean;
+  characterId: string;
+  presets: ActionPreset[];
+  characterAttributes?: {
+    strength: number;
+    agility: number;
+    vigor: number;
+    intellect: number;
+    presence: number;
+  };
+  canEdit?: boolean;
+  loading?: boolean;
 };
 
-export function PresetsSection({ characterId, presets, canEdit }: Props) {
-    const [open, setOpen] = useState(false);
-    const [editing, setEditing] = useState<ActionPreset | null>(null);
+export function PresetsSection({
+  characterId,
+  presets,
+  characterAttributes,
+  canEdit,
+  loading = false,
+}: Props) {
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<ActionPreset | null>(null);
 
-    return (
-        <>
-            <Section
-                title="Habilidades"
-                action={
-                    canEdit && (
-                        <Button size="small" onClick={() => setOpen(true)}>
-                            + Habilidade
-                        </Button>
-                    )
-                }
-            >
-                <Stack spacing={1}>
-                    {presets.map(preset => (
-                        <PresetRow
-                            key={preset.id}
-                            preset={preset}
-                            canEdit={canEdit}
-                            onEdit={() => {
-                                setEditing(preset);
-                                setOpen(true);
-                            }}
-                        />
-                    ))}
-                </Stack>
-            </Section>
+  return (
+    <>
+      <Section
+        title="Habilidades"
+        action={
+          canEdit &&
+          !loading && (
+            <Button size="small" onClick={() => setOpen(true)}>
+              + Habilidade
+            </Button>
+          )
+        }
+      >
+        <Stack spacing={1.5}>
+          {loading ? (
+            Array(3)
+              .fill(1)
+              .map((_, index) => (
+                <Skeleton
+                  key={index}
+                  variant="rectangular"
+                  height={80}
+                  sx={{ borderRadius: 2 }}
+                />
+              ))
+          ) : presets.length ? (
+            presets.filter(Boolean).map((preset) => {
+              const attributeName =
+                preset.attribute.toLowerCase() as keyof typeof characterAttributes;
+              const attributeValue = characterAttributes?.[attributeName] || 0;
 
-            <PresetModal
-                open={open}
-                characterId={characterId}
-                // preset={editing}
-                onClose={() => {
-                    setOpen(false);
-                    setEditing(null);
-                }}
-            />
-        </>
-    );
+              return (
+                <PresetCard
+                  key={preset.id}
+                  preset={preset}
+                  characterAttribute={attributeValue}
+                  canEdit={canEdit}
+                  onEdit={() => {
+                    setEditing(preset);
+                    setOpen(true);
+                  }}
+                  onDelete={async () => {
+                    // await getActionPresets();
+                  }}
+                />
+              );
+            })
+          ) : (
+            <SimpleListItem>Nenhuma habilidade cadastrada</SimpleListItem>
+          )}
+        </Stack>
+      </Section>
+
+      <PresetModal
+        open={open}
+        characterId={characterId}
+        preset={editing}
+        onClose={() => {
+          setOpen(false);
+          setEditing(null);
+        }}
+      />
+    </>
+  );
 }

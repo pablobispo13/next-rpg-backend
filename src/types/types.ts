@@ -48,12 +48,13 @@ export type CharacterInventory = {
 
 export type ActionPresetType = {
     id: string;
+    characterId: string;
     name: string;
     description?: string | null;
-    type: "SKILL" | "ATTACK" | "TEST" | "REACT" | "SUPPORT";
+    type: "SKILL" | "ATTACK" | "TEST" | "REACT" | "SUPPORT" | "SPELL" | "HEAL" | "BUFF" | "DEBUFF";
     targetType: string;
     diceFormula: string;
-    impactFormula: string
+    impactFormula?: string | null;
     modifier: number;
     attribute: string;
     critThreshold?: number | null;
@@ -65,7 +66,7 @@ export type ActionPresetType = {
     statAffected?: string | null;
     effectAmount?: number | null;
     statusApplied?: string | null;
-    effects: CharacterStatusEffect[]
+    effects?: CharacterStatusEffect[]
 };
 
 export type CharacterStatusEffect = {

@@ -138,7 +138,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 return res.status(400).json({ message: "Contra-ataque sem impactFormula configurado" });
             }
             const impactRoll = rollDice(preset.impactFormula);
-            const counterDamage = impactRoll.total;
+            const counterDamage = impactRoll.total + (target.strength || 0);
             await prisma.character.update({
                 where: { id: attacker.id },
                 data: {
@@ -148,7 +148,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 },
             });
 
-            finalMessage = `${target.name} contra-atacou com sucesso (${reactionRollData.total} vs ${attackRoll.total}) e causou ${counterDamage} de dano em ${attacker.name}`;
+            finalMessage = `${target.name} contra-atacou com sucesso (${reactionRollData.total} vs ${attackRoll.total}) e causou ${counterDamage} de dano (${impactRoll.total} + ${target.strength || 0} força) em ${attacker.name}`;
         } else {
             // Ataque original vence
             await prisma.character.update({
