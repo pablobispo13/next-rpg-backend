@@ -254,11 +254,7 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
   useEffect(() => {
     if (!combat || draggedRef.current) return;
     const sorted = [...combat.participants].sort((a: any, b: any) => a.turnOrder - b.turnOrder);
-    setOrderedParticipants((prev) => {
-      const prevIds = prev.map((p: any) => p.id).join(",");
-      const newIds = sorted.map((p: any) => p.id).join(",");
-      return prevIds === newIds ? prev : sorted;
-    });
+    setOrderedParticipants(sorted);
   }, [combat?.participants]);
 
   /* ---- detect HP changes for floating numbers ---- */
@@ -450,7 +446,9 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
                     animate={isActive ? {
                       boxShadow: ["0 0 18px rgba(79,195,247,0.5)", "0 0 32px rgba(79,195,247,0.95)", "0 0 18px rgba(79,195,247,0.5)"],
                     } : { boxShadow: "0 2px 8px rgba(0,0,0,0.5)" }}
-                    transition={isActive ? { duration: 2, repeat: Infinity, ease: "easeInOut" } : {}}
+                    transition={isActive
+                      ? { duration: 2, repeat: Infinity, ease: "easeInOut", layout: { duration: 0 } }
+                      : { layout: { duration: 0 } }}
                     style={{ borderRadius: 8, cursor: isMaster ? "grab" : "default", position: "relative" }}
                   >
                     {/* Floating damage/heal numbers */}
@@ -643,10 +641,48 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
         </DialogTitle>
         <DialogContent>
           <Stack spacing={2}>
-            <Box sx={{ textAlign: "center", py: 1 }}>
-              <Typography variant="h6">{pendingReactionRoll?.attackerName} atacou {pendingReactionRoll?.currentReactionTarget?.name}!</Typography>
+            <Box sx={{ textAlign: "center", py: 0.5 }}>
+              <Typography variant="h6" fontWeight={700}>
+                {pendingReactionRoll?.attackerName} atacou {pendingReactionRoll?.currentReactionTarget?.name}!
+              </Typography>
+              {pendingReactionRoll?.critical && (
+                <Typography variant="caption" sx={{ color: "#f97316", fontWeight: 700, fontSize: 12 }}>
+                  🔥 ACERTO CRÍTICO!
+                </Typography>
+              )}
             </Box>
-            <LinearProgress variant="determinate" value={((pendingReactionRoll?.currentTargetIndex ?? 0) / (pendingReactionRoll?.totalTargets ?? 1)) * 100} sx={{ height: 8, borderRadius: 1 }} />
+
+            {/* Attack stats */}
+            <Stack direction="row" spacing={1.5} justifyContent="center">
+              <Box sx={{ textAlign: "center", px: 2, py: 1.25, borderRadius: 1.5, backgroundColor: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.25)", minWidth: 80 }}>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.25 }}>Rolagem</Typography>
+                <Typography variant="h5" color="#f87171" fontWeight={800} lineHeight={1}>{pendingReactionRoll?.total}</Typography>
+                {(pendingReactionRoll?.rolls?.length ?? 0) > 0 && (
+                  <Typography variant="caption" sx={{ fontFamily: "monospace", fontSize: 9, color: "#777" }}>
+                    ({pendingReactionRoll!.rolls.join(", ")}){pendingReactionRoll!.modifier > 0 ? ` +${pendingReactionRoll!.modifier}` : pendingReactionRoll!.modifier < 0 ? ` ${pendingReactionRoll!.modifier}` : ""}
+                  </Typography>
+                )}
+              </Box>
+
+              {(pendingReactionRoll?.damage ?? 0) > 0 && (
+                <Box sx={{ textAlign: "center", px: 2, py: 1.25, borderRadius: 1.5, backgroundColor: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.25)", minWidth: 80 }}>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.25 }}>Dano</Typography>
+                  <Typography variant="h5" color="#f87171" fontWeight={800} lineHeight={1}>{pendingReactionRoll!.damage}</Typography>
+                </Box>
+              )}
+
+              {(pendingReactionRoll?.currentReactionTarget?.baseDefense ?? 0) > 0 && (
+                <Box sx={{ textAlign: "center", px: 2, py: 1.25, borderRadius: 1.5, backgroundColor: "rgba(96,165,250,0.08)", border: "1px solid rgba(96,165,250,0.25)", minWidth: 80 }}>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.25 }}>Sua Defesa</Typography>
+                  <Typography variant="h5" color="#60a5fa" fontWeight={800} lineHeight={1}>{pendingReactionRoll!.currentReactionTarget.baseDefense}</Typography>
+                </Box>
+              )}
+            </Stack>
+
+            {pendingReactionRoll?.totalTargets > 1 && (
+              <LinearProgress variant="determinate" value={((pendingReactionRoll?.currentTargetIndex ?? 0) / (pendingReactionRoll?.totalTargets ?? 1)) * 100} sx={{ height: 6, borderRadius: 1 }} />
+            )}
+
             <Typography variant="body2" color="text.secondary">Escolha sua reação:</Typography>
             <Stack direction="row" spacing={1} flexWrap="wrap">
               {pendingReactionRoll?.currentReactionTarget?.blockPresetId && (

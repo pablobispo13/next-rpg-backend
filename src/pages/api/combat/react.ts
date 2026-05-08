@@ -6,6 +6,17 @@ import { LogType } from "@prisma/client";
 import { getAttributeValue } from "../../../lib/attributes";
 import { notifyCombatUpdate } from "../../../lib/pusher";
 
+function buildNameList(names: string[]): string {
+    if (names.length === 0) return "";
+    if (names.length === 1) return names[0];
+    return names.slice(0, -1).join(", ") + " e " + names[names.length - 1];
+}
+
+const REACTION_PT: Record<string, string> = {
+    DODGE: "esquivar",
+    BLOCK: "bloquear",
+};
+
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     if (req.method !== "POST") {
         res.status(405).end();
@@ -126,7 +137,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         await applyDamageToTarget(damage);
 
         const updatedTargets = (attackRoll.pendingReactionTargets as any).map((rt: any) =>
-            rt.targetId === targetId ? { ...rt, status: "REACTED" } : rt
+            rt.targetId === targetId ? { ...rt, status: "SKIPPED" } : rt
         );
 
         const allReacted = updatedTargets.every((rt: any) => rt.status !== "PENDING");
@@ -140,17 +151,28 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             },
         });
 
-        await prisma.actionLog.create({
-            data: {
-                type: LogType.REACTION,
-                message: `${target.name} decidiu não reagir e sofreu ${damage} de dano`,
-                characterId: target.id,
-                targetId: attacker.id,
-                rollId: attackRoll.id,
-                combatId: attackRoll.combatId,
-                turnId,
-            },
-        });
+        if (allReacted) {
+            const skippedIds: string[] = updatedTargets
+                .filter((rt: any) => rt.status === "SKIPPED")
+                .map((rt: any) => rt.targetId);
+
+            const skippedChars = await prisma.character.findMany({
+                where: { id: { in: skippedIds } },
+                select: { name: true },
+            });
+
+            const nameList = buildNameList(skippedChars.map((c) => c.name));
+            await prisma.actionLog.create({
+                data: {
+                    type: LogType.REACTION,
+                    message: `${nameList} ${skippedIds.length > 1 ? "tomaram" : "tomou"} ${damage} de dano`,
+                    characterId: target.id,
+                    rollId: attackRoll.id,
+                    combatId: attackRoll.combatId,
+                    turnId,
+                },
+            });
+        }
 
         if (attackRoll.combatId) notifyCombatUpdate(attackRoll.combatId);
         return res.status(200).json({ success: false, skipped: true });
@@ -196,12 +218,13 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         }
     } else {
         reactionSuccess = reactionTotal >= attackRoll.total;
+        const actionPt = REACTION_PT[reactionType] ?? reactionType.toLowerCase();
 
         if (!reactionSuccess) {
             await applyDamageToTarget(damage);
-            finalMessage = `${target.name} falhou ao tentar ${reactionType} (${reactionTotal} vs ${attackRoll.total}) e sofreu ${damage} de dano`;
+            finalMessage = `${target.name} tentou ${actionPt} (${reactionTotal} vs ${attackRoll.total}) mas falhou e sofreu ${damage} de dano`;
         } else {
-            finalMessage = `${target.name} teve sucesso ao tentar ${reactionType} (${reactionTotal} vs ${attackRoll.total}) e evitou o dano`;
+            finalMessage = `${target.name} conseguiu ${actionPt} (${reactionTotal} vs ${attackRoll.total}) e evitou o dano`;
         }
     }
 
@@ -256,6 +279,31 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             turnId,
         },
     });
+
+    // If all reactions are resolved and some earlier targets had skipped, log their damage now
+    if (allReacted) {
+        const skippedIds: string[] = updatedTargets
+            .filter((rt: any) => rt.status === "SKIPPED")
+            .map((rt: any) => rt.targetId);
+
+        if (skippedIds.length > 0) {
+            const skippedChars = await prisma.character.findMany({
+                where: { id: { in: skippedIds } },
+                select: { name: true },
+            });
+            const nameList = buildNameList(skippedChars.map((c) => c.name));
+            await prisma.actionLog.create({
+                data: {
+                    type: LogType.REACTION,
+                    message: `${nameList} ${skippedIds.length > 1 ? "tomaram" : "tomou"} ${damage} de dano`,
+                    characterId: target.id,
+                    rollId: attackRoll.id,
+                    combatId: attackRoll.combatId,
+                    turnId,
+                },
+            });
+        }
+    }
 
     if (attackRoll.combatId) notifyCombatUpdate(attackRoll.combatId); // fire-and-forget
     return res.status(200).json({ success: reactionSuccess });

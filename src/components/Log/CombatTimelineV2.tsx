@@ -103,10 +103,10 @@ export function CombatTimelineV2({ logs }: CombatTimelineV2Props) {
 
         // --- ROLL GROUP ---
         const { key, logs: groupLogs } = item;
-        const mainLog = groupLogs.find((l) => l.type === "ROLL") ?? groupLogs[0];
-        const dmgLog  = groupLogs.find((l) => l.type === "DAMAGE");
-        const healLog = groupLogs.find((l) => l.type === "HEAL");
-        const reactLog = groupLogs.find((l) => l.type === "REACTION");
+        const mainLog  = groupLogs.find((l) => l.type === "ROLL") ?? groupLogs[0];
+        const dmgLog   = groupLogs.find((l) => l.type === "DAMAGE");
+        const healLog  = groupLogs.find((l) => l.type === "HEAL");
+        const reactLogs = groupLogs.filter((l) => l.type === "REACTION");
 
         const roll = mainLog.roll;
         const succeeded = roll?.success ?? roll?.sucess;
@@ -183,12 +183,12 @@ export function CombatTimelineV2({ logs }: CombatTimelineV2Props) {
                   </Typography>
                 )}
 
-                {/* Reaction result line */}
-                {reactLog && (
-                  <Typography variant="caption" sx={{ color: "#60a5fa", fontSize: 10 }}>
-                    ⚡ {reactLog.message}
+                {/* Reaction result lines */}
+                {reactLogs.map((rl) => (
+                  <Typography key={rl.id} variant="caption" sx={{ color: "#60a5fa", fontSize: 10 }}>
+                    ⚡ {rl.message}
                   </Typography>
-                )}
+                ))}
 
                 {/* Damage / heal result line from related logs */}
                 {(dmgLog || healLog) && (

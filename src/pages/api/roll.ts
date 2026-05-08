@@ -6,6 +6,24 @@ import { LogType, EffectType, ActionType } from "@prisma/client";
 import { getAttributeValue } from "../../lib/attributes";
 import { notifyCombatUpdate } from "../../lib/pusher";
 
+function joinNames(names: string[]): string {
+    if (names.length === 1) return names[0];
+    return names.slice(0, -1).join(", ") + " e " + names[names.length - 1];
+}
+
+function buildRollLog(charName: string, presetName: string, presetType: string, hitNames: string[], missNames: string[]): string {
+    if (presetType !== ActionType.ATTACK) {
+        return `${charName} usou ${presetName} em ${joinNames([...hitNames, ...missNames])}`;
+    }
+    if (hitNames.length === 0) {
+        return `${charName} tentou ${presetName} em ${joinNames(missNames)}, mas falhou na defesa`;
+    }
+    if (missNames.length === 0) {
+        return `${charName} acertou ${presetName} em ${joinNames(hitNames)}`;
+    }
+    return `${charName} usou ${presetName} — acertou: ${joinNames(hitNames)} | errou: ${joinNames(missNames)}`;
+}
+
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
     if (req.method === "GET") {
@@ -204,6 +222,10 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     ===================================================== */
 
     const pendingReactionTargets: Array<{ targetId: string; status: "PENDING" }> = [];
+    const hitNames:          string[] = [];
+    const missNames:         string[] = [];
+    const directDamageNames: string[] = [];
+    const directHealNames:   string[] = [];
 
     // Dano é rolado UMA vez e aplicado a todos os alvos
     let impactTotal: number | null = null;
@@ -264,23 +286,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 },
             });
 
-            await prisma.rollResult.update({
-                where: { id: roll.id },
-                data: { success: false },
-            });
-
-            await prisma.actionLog.create({
-                data: {
-                    type: LogType.ROLL,
-                    message: `${character.name} tentou ${preset.name} em ${target.name}, mas falhou na defesa`,
-                    characterId: character.id,
-                    targetId,
-                    rollId: roll.id,
-                    combatId: combatId ?? null,
-                    turnId: turnId ?? null,
-                },
-            });
-
+            missNames.push(target.name);
             continue;
         }
 
@@ -368,43 +374,10 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             },
         });
 
-        await prisma.actionLog.create({
-            data: {
-                type: LogType.ROLL,
-                message: shouldOpenReaction
-                    ? `${character.name} acertou ${preset.name} em ${target.name}`
-                    : `${character.name} usou ${preset.name} em ${target.name}`,
-                characterId: character.id,
-                targetId,
-                rollId: roll.id,
-                combatId: combatId ?? null,
-                turnId: turnId ?? null,
-            },
-        });
-
-        // Cria ActionLog de DAMAGE/HEAL se houver impacto (apenas quando já aplicado; ataques com reação pendente logam no react.ts)
+        hitNames.push(target.name);
         if (impactTotal && impactTotal > 0 && !shouldOpenReaction) {
-            const damageLogType =
-                preset.type === ActionType.ATTACK
-                    ? LogType.DAMAGE
-                    : LogType.HEAL;
-
-            const damageMessage =
-                preset.type === ActionType.ATTACK
-                    ? `${target.name} recebeu ${impactTotal} de dano`
-                    : `${target.name} foi curado em ${impactTotal} por ${preset.name}`;
-
-            await prisma.actionLog.create({
-                data: {
-                    type: damageLogType,
-                    message: damageMessage,
-                    characterId: character.id,
-                    targetId,
-                    rollId: roll.id,
-                    combatId: combatId ?? null,
-                    turnId: turnId ?? null,
-                },
-            });
+            if (preset.type === ActionType.ATTACK) directDamageNames.push(target.name);
+            else if (isHealType) directHealNames.push(target.name);
         }
 
         if (
@@ -439,6 +412,55 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 },
             });
         }
+    }
+
+    // Corrige success para o caso de todos errarem (nenhum hit path rodou)
+    if (hitNames.length === 0 && missNames.length > 0) {
+        await prisma.rollResult.update({ where: { id: roll.id }, data: { success: false } });
+    }
+
+    // Log único de ataque/ação consolidando todos os alvos
+    await prisma.actionLog.create({
+        data: {
+            type: LogType.ROLL,
+            message: buildRollLog(character.name, preset.name, preset.type as string, hitNames, missNames),
+            characterId: character.id,
+            rollId: roll.id,
+            combatId: combatId ?? null,
+            turnId: turnId ?? null,
+        },
+    });
+
+    // Log de dano direto (sem reação pendente)
+    if (directDamageNames.length > 0 && impactTotal && impactTotal > 0) {
+        await prisma.actionLog.create({
+            data: {
+                type: LogType.DAMAGE,
+                message: directDamageNames.length === 1
+                    ? `${directDamageNames[0]} recebeu ${impactTotal} de dano`
+                    : `${joinNames(directDamageNames)} receberam ${impactTotal} de dano`,
+                characterId: character.id,
+                rollId: roll.id,
+                combatId: combatId ?? null,
+                turnId: turnId ?? null,
+            },
+        });
+    }
+
+    // Log de cura direta
+    if (directHealNames.length > 0 && impactTotal && impactTotal > 0) {
+        await prisma.actionLog.create({
+            data: {
+                type: LogType.HEAL,
+                message: directHealNames.length === 1
+                    ? `${directHealNames[0]} foi curado em ${impactTotal} por ${preset.name}`
+                    : `${joinNames(directHealNames)} foram curados em ${impactTotal} por ${preset.name}`,
+                characterId: character.id,
+                rollId: roll.id,
+                combatId: combatId ?? null,
+                turnId: turnId ?? null,
+            },
+        });
     }
 
     // Atualiza roll com todos os alvos pendentes de reação

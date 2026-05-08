@@ -277,6 +277,13 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             }
             const { order } = req.body;
             if (!combatId || !order) return res.status(400).json({ message: "Dados inválidos" });
+
+            // Find the participant who is currently active so we can keep pointing at them
+            const combatForReorder = await prisma.combat.findUnique({
+                where: { id: combatId },
+                select: { currentTurnIndex: true, participants: { select: { id: true, turnOrder: true } } },
+            });
+
             await Promise.all(
                 (order as { participantId: string; turnOrder: number }[]).map((item) =>
                     prisma.combatParticipant.update({
@@ -285,6 +292,25 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                     })
                 )
             );
+
+            // Update currentTurnIndex to keep pointing at the same character after reorder
+            if (combatForReorder) {
+                const activeParticipantId = combatForReorder.participants
+                    .find((p) => p.turnOrder === combatForReorder.currentTurnIndex)?.id;
+
+                if (activeParticipantId) {
+                    const newTurnOrder = (order as { participantId: string; turnOrder: number }[])
+                        .find((item) => item.participantId === activeParticipantId)?.turnOrder;
+
+                    if (newTurnOrder !== undefined) {
+                        await prisma.combat.update({
+                            where: { id: combatId },
+                            data: { currentTurnIndex: newTurnOrder },
+                        });
+                    }
+                }
+            }
+
             notifyCombatUpdate(combatId);
             return res.status(200).json({ message: "Ordem atualizada" });
         }
@@ -311,6 +337,19 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
         case "endCombat": {
             if (!combatId) return res.status(400).json({ message: "Dados insuficientes" });
+
+            // Sync final HP from CombatParticipant back to Character before closing
+            const finalParticipants = await prisma.combatParticipant.findMany({
+                where: { combatId },
+            });
+            await Promise.all(
+                finalParticipants.map((p) =>
+                    prisma.character.update({
+                        where: { id: p.characterId },
+                        data: { life: p.currentLife },
+                    })
+                )
+            );
 
             await prisma.combat.update({ where: { id: combatId }, data: { active: false } });
             await prisma.actionLog.create({ data: { type: LogType.COMBAT_END, message: "Combate finalizado", combatId } });
