@@ -140,10 +140,10 @@ export function createCounterAttack(
   };
 }
 
-export async function createCharacterTemplate(): Promise<any> {
+export async function createCharacterTemplate(name = "Novo Personagem"): Promise<any> {
   /* eslint-disable  @typescript-eslint/no-explicit-any */
   const result = await api.post("/characters", {
-    name: "Personagem de template",
+    name,
     life: 20,
     maxLife: 20,
     xp: 0,
@@ -180,7 +180,7 @@ export async function createCharacterTemplate(): Promise<any> {
   }
   if (counterAttackId && dodgeId && blockId)
     await api.put(`/characters/${characterId}`, {
-      name: "Personagem de template",
+      name,
       life: 20,
       maxLife: 20,
       xp: 0,

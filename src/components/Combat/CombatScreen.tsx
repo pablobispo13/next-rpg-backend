@@ -184,7 +184,7 @@ export default function CombatScreen({ combatId }: CombatScreenProps) {
 function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
   const {
     combat, isMyTurn, actionUsed, myCharacterIds, selectedTargets,
-    selectTarget, useMainAction, endTurn, endCombat, pendingReactionRoll,
+    selectTarget, clearTargets, useMainAction, endTurn, endCombat, pendingReactionRoll,
     resolveReaction, refreshCombat,
     isLoading, combatStats, clearStats,
   } = useCombat();
@@ -212,6 +212,13 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
   // Fullscreen battlefield
   const [battleFullscreen, setBattleFullscreen] = useState(false);
   const battleIframeRef = useRef<HTMLIFrameElement>(null);
+
+  // Armed preset (user must pick an action before selecting targets)
+  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (actionUsed || !isMyTurn) setSelectedPresetId(null);
+  }, [actionUsed, isMyTurn]);
 
   function handleBattleFullscreen() {
     if (battleIframeRef.current?.requestFullscreen) {
@@ -381,6 +388,13 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
   const canAct = isMyTurn && !pendingReactionRoll && !actionUsed;
   const canEndTurn = isMyTurn && !pendingReactionRoll;
 
+  // Derived from the currently armed preset
+  const selectedPreset = presetsSource.presets?.find(
+    (p: ActionPresetType & { isAreaEffect?: boolean }) => p.id === selectedPresetId
+  ) as (ActionPresetType & { isAreaEffect?: boolean }) | undefined;
+  const isAoe = !!(selectedPreset?.isAreaEffect) || selectedPreset?.targetType === "MULTIPLE";
+  const isHealPreset = selectedPreset?.type === "HEAL" || selectedPreset?.type === "SUPPORT";
+
   return (
     <Box sx={{ height: "100vh", display: "grid", gridTemplateRows: "80px 1fr 0px", backgroundColor: "#0e0e1a", color: "#fff", overflow: "hidden" }}>
       <Head><title>Tela de combate</title></Head>
@@ -478,11 +492,20 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
                     </AnimatePresence>
 
                     <Card
-                      onClick={() => canAct && p.character.id !== activeCharacter.id && selectTarget(p.character.id)}
+                      onClick={() => {
+                        if (!canAct) return;
+                        const isSelf = p.character.id === activeCharacter.id;
+                        if (isSelf && !isHealPreset) return;
+                        selectTarget(p.character.id, isAoe);
+                      }}
                       sx={{
-                        cursor: canAct && p.character.id !== activeCharacter.id ? "pointer" : isMaster ? "grab" : "default",
-                        backgroundColor: isTarget ? "rgba(239,83,80,0.15)" : isActive ? "rgba(42,42,85,0.8)" : "rgba(28,28,46,0.6)",
-                        border: isActive ? "2px solid #4fc3f7" : isTarget ? "2px solid #ef5350" : "1px solid rgba(51,51,51,0.8)",
+                        cursor: canAct && (p.character.id !== activeCharacter.id || isHealPreset) ? "pointer" : isMaster ? "grab" : "default",
+                        backgroundColor: isTarget
+                          ? (isHealPreset ? "rgba(74,222,128,0.15)" : "rgba(239,83,80,0.15)")
+                          : (isHealPreset && p.character.id === activeCharacter.id && canAct ? "rgba(74,222,128,0.05)" : isActive ? "rgba(42,42,85,0.8)" : "rgba(28,28,46,0.6)"),
+                        border: isActive ? "2px solid #4fc3f7"
+                          : isTarget ? (isHealPreset ? "2px solid #4ade80" : "2px solid #ef5350")
+                          : (isHealPreset && p.character.id === activeCharacter.id && canAct ? "1px solid rgba(74,222,128,0.35)" : "1px solid rgba(51,51,51,0.8)"),
                         opacity: p.currentLife <= 0 ? 0.45 : 1,
                         transition: "background 0.3s, border 0.3s, opacity 0.3s",
                       }}
@@ -588,7 +611,9 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
           <Stack direction="row" spacing={1.5} flexWrap="wrap">
             {presetsSource.presets?.map((preset: ActionPresetType & { isAreaEffect?: boolean }) => {
               const needsTarget = preset.targetType !== "SELF";
-              const isAoe = preset.isAreaEffect || preset.targetType === "MULTIPLE";
+              const presetIsAoe = !!(preset.isAreaEffect) || preset.targetType === "MULTIPLE";
+              const isArmed = selectedPresetId === preset.id;
+              const presetIsHeal = preset.type === "HEAL" || preset.type === "SUPPORT";
               if (["TEST", "SKILL", "REACT"].includes(preset.type)) return null;
 
               return (
@@ -601,15 +626,34 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
                 >
                   <Box sx={{ position: "relative" }}>
                     <Button
-                      variant={preset.requiresTurn ? "contained" : "outlined"}
-                      color={preset.requiresTurn ? "primary" : "inherit"}
-                      disabled={!canAct || isLoading || (preset.requiresTurn && actionUsed) || (needsTarget && selectedTargets.length === 0)}
-                      onClick={() => useMainAction({ presetId: preset.id, targetIds: needsTarget ? selectedTargets : [], characterId: activeCharacter.id })}
-                      sx={{ transition: "all 0.3s", pr: isAoe ? 4 : undefined, "&:hover:not(:disabled)": { boxShadow: "0 0 12px rgba(107,122,219,0.5)", transform: "translateY(-2px)" } }}
+                      variant={isArmed ? "contained" : preset.requiresTurn ? "contained" : "outlined"}
+                      color={isArmed ? (presetIsHeal ? "success" : "secondary") : preset.requiresTurn ? "primary" : "inherit"}
+                      disabled={!canAct || isLoading || (preset.requiresTurn && actionUsed)}
+                      onClick={() => {
+                        if (!canAct || isLoading || (preset.requiresTurn && actionUsed)) return;
+                        if (!needsTarget) {
+                          useMainAction({ presetId: preset.id, targetIds: [], characterId: activeCharacter.id });
+                          return;
+                        }
+                        if (isArmed && selectedTargets.length > 0) {
+                          useMainAction({ presetId: preset.id, targetIds: selectedTargets, characterId: activeCharacter.id });
+                          setSelectedPresetId(null);
+                        } else {
+                          if (selectedPresetId !== preset.id) clearTargets();
+                          setSelectedPresetId(preset.id);
+                        }
+                      }}
+                      sx={{
+                        transition: "all 0.3s",
+                        pr: presetIsAoe ? 4 : undefined,
+                        outline: isArmed ? "2px solid rgba(167,139,250,0.7)" : "none",
+                        outlineOffset: 2,
+                        "&:hover:not(:disabled)": { boxShadow: "0 0 12px rgba(107,122,219,0.5)", transform: "translateY(-2px)" },
+                      }}
                     >
                       {preset.name}
                     </Button>
-                    {isAoe && (
+                    {presetIsAoe && (
                       <Chip label="Área" size="small" sx={{ position: "absolute", top: -8, right: -8, height: 16, fontSize: 9, bgcolor: "#7c3aed", color: "#fff", pointerEvents: "none" }} />
                     )}
                   </Box>
@@ -625,11 +669,20 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
             )}
           </Stack>
 
-          {canAct && selectedTargets.length === 0 && presetsSource.presets?.some((p: ActionPresetType) => p.targetType !== "SELF") && (
-            <Typography fontSize={12} color="#ff9800">Selecione um alvo ou passe a rodada.</Typography>
+          {canAct && !selectedPresetId && (
+            <Typography fontSize={12} color="#ff9800">Selecione uma habilidade acima para agir.</Typography>
           )}
-          {canAct && selectedTargets.length > 1 && (
-            <Typography fontSize={12} color="#a78bfa">🎯 {selectedTargets.length} alvos selecionados — ataque em múltiplos inimigos</Typography>
+          {canAct && selectedPresetId && selectedTargets.length === 0 && (
+            <Typography fontSize={12} color="#4fc3f7">
+              {isAoe ? "🎯 Selecione um ou mais alvos" : "🎯 Selecione um alvo"}
+              {isHealPreset ? " (você mesmo ou qualquer participante)" : " inimigo"}
+              {" "}— então clique em <strong>{selectedPreset?.name}</strong> para executar.
+            </Typography>
+          )}
+          {canAct && selectedPresetId && selectedTargets.length > 0 && (
+            <Typography fontSize={12} color="#a78bfa">
+              🎯 {selectedTargets.length} alvo{selectedTargets.length > 1 ? "s" : ""} selecionado{selectedTargets.length > 1 ? "s" : ""} — clique em <strong>{selectedPreset?.name}</strong> para executar.
+            </Typography>
           )}
         </Stack>
       </Box>

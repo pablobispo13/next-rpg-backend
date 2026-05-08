@@ -28,7 +28,7 @@ export type CombatContextType = {
     combatStats: CombatStats | null;
     clearStats: () => void;
     loadCombat: (id?: string) => Promise<void>;
-    selectTarget: (id: string) => void;
+    selectTarget: (id: string, allowMultiple?: boolean) => void;
     clearTargets: () => void;
     useMainAction: (payload: {
         presetId: string;
@@ -228,13 +228,15 @@ export function CombatProvider({
         Boolean(activeCharacter) && controlledCharacterIds.includes(activeCharacter.id);
 
     /* UI actions */
-    function selectTarget(id: string) {
+    function selectTarget(id: string, allowMultiple = false) {
         if (!isMyTurn) return;
         if (actionUsed) return;
         if (pendingReactionRoll) return;
-        setSelectedTargets((prev) =>
-            prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]
-        );
+        setSelectedTargets((prev) => {
+            if (prev.includes(id)) return prev.filter((t) => t !== id);
+            if (!allowMultiple) return [id];
+            return [...prev, id];
+        });
     }
 
     function clearTargets() {

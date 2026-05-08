@@ -29,7 +29,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         include: {
             participants: {
                 include: {
-                    character: { select: { id: true, name: true, maxLife: true } },
+                    character: { select: { id: true, name: true, maxLife: true, owner: { select: { role: true } } } },
                 },
             },
             logs: {
@@ -44,7 +44,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                     healing: true,
                     success: true,
                     critical: true,
-                    character: { select: { id: true, name: true } },
+                    character: { select: { id: true, name: true, owner: { select: { role: true } } } },
                 },
             },
         },
@@ -52,17 +52,20 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
     // Compute per-combat stats from rollResults
     const combatsWithStats = combats.map((combat) => {
-        const statsByChar: Record<string, { name: string; totalDamage: number; hits: number; misses: number; maxHit: number }> = {};
+        const statsByChar: Record<string, { name: string; isNpc: boolean; totalDamage: number; totalHealing: number; hits: number; misses: number; maxHit: number }> = {};
         for (const r of combat.rollResults) {
             const charId = r.characterId;
             if (!statsByChar[charId]) {
-                statsByChar[charId] = { name: r.character.name, totalDamage: 0, hits: 0, misses: 0, maxHit: 0 };
+                statsByChar[charId] = { name: r.character.name, isNpc: r.character.owner?.role === "MESTRE", totalDamage: 0, totalHealing: 0, hits: 0, misses: 0, maxHit: 0 };
             }
             if (r.success === true) statsByChar[charId].hits++;
             else if (r.success === false) statsByChar[charId].misses++;
             if (r.damage) {
                 statsByChar[charId].totalDamage += r.damage;
                 statsByChar[charId].maxHit = Math.max(statsByChar[charId].maxHit, r.damage);
+            }
+            if (r.healing) {
+                statsByChar[charId].totalHealing += r.healing;
             }
         }
 
