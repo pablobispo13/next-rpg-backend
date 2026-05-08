@@ -343,7 +343,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 succeeded: true,
                 critical: isCritical,
                 damageApplied:
-                    preset.type === ActionType.ATTACK && !shouldOpenReaction ? impactTotal : null,
+                    preset.type === ActionType.ATTACK ? impactTotal : null,
                 healingApplied:
                     isHealType ? impactTotal : null,
                 targetDefense: target.baseDefense ?? 0,
@@ -385,8 +385,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             },
         });
 
-        // Cria ActionLog de DAMAGE/HEAL se houver impacto
-        if (impactTotal && impactTotal > 0) {
+        // Cria ActionLog de DAMAGE/HEAL se houver impacto (apenas quando já aplicado; ataques com reação pendente logam no react.ts)
+        if (impactTotal && impactTotal > 0 && !shouldOpenReaction) {
             const damageLogType =
                 preset.type === ActionType.ATTACK
                     ? LogType.DAMAGE
