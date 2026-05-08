@@ -2,15 +2,16 @@
 
 import {
     Box,
-    Card,
-    CardContent,
-    Typography,
     Stack,
     CircularProgress,
     Button,
+    Typography,
+    MenuItem,
+    TextField,
 } from "@mui/material";
 import { useEffect, useState } from "react";
 import api from "../lib/api";
+import { RollInfoCard } from "./Log/RollInfoCard";
 
 type Roll = {
     id: string;
@@ -20,10 +21,11 @@ type Roll = {
     turnId: string | null;
     targetIds: string[];
 
-    diceRolled: string;      // ex: "1d20"
-    rolls: number[];         // ex: [8]
+    diceRolled: string;
+    rolls: number[];
     modifier: number;
     total: number;
+    impactRolls: number[];
 
     success: boolean;
     critical: boolean;
@@ -46,19 +48,37 @@ type Roll = {
         id: string;
         name: string;
         type: string;
-    };
+        impactFormula: string | null;
+    } | null;
+};
+
+type CombatOption = {
+    id: string;
+    round: number;
+    createdAt: string;
+    participants: { character: { name: string } }[];
 };
 
 export default function RecentRollsScreen() {
     const [rolls, setRolls] = useState<Roll[]>([]);
     const [loading, setLoading] = useState(true);
+    const [combatFilter, setCombatFilter] = useState<string>("all");
+    const [combats, setCombats] = useState<CombatOption[]>([]);
+
+    useEffect(() => {
+        api.get("/combat/active")
+            .then((res) => setCombats(Array.isArray(res.data) ? res.data : []))
+            .catch(() => setCombats([]));
+    }, []);
 
     async function loadRolls() {
         try {
             setLoading(true);
-            const res = await api.get("/roll?limit=30");
+            const params: Record<string, string | number> = { limit: 30 };
+            if (combatFilter !== "all") params.combatId = combatFilter;
+            const res = await api.get("/roll", { params });
             setRolls(
-                res.data.rolls.sort(
+                (res.data.rolls ?? []).sort(
                     (a: Roll, b: Roll) =>
                         new Date(b.createdAt).getTime() -
                         new Date(a.createdAt).getTime()
@@ -73,30 +93,39 @@ export default function RecentRollsScreen() {
 
     useEffect(() => {
         loadRolls();
-    }, []);
+    }, [combatFilter]);
 
     return (
         <Box
             sx={{
                 minHeight: "100vh",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
                 backgroundColor: "#0e0e1a",
                 color: "#fff",
                 p: 3,
             }}
         >
-            <Box
-                sx={{
-                    width: "100%",
-                    maxWidth: 600,
-                }}
-            >
-                <Stack spacing={2}>
-                    <Typography variant="h5" textAlign="center">
-                        Testes Recentes
-                    </Typography>
+            <Stack spacing={2} sx={{ maxWidth: 800, mx: "auto" }}>
+                <Typography variant="h5" fontWeight="bold">
+                    Rolagens Recentes
+                </Typography>
+
+                <Stack direction="row" spacing={2} alignItems="center">
+                    <TextField
+                        select
+                        label="Filtrar por Combate"
+                        value={combatFilter}
+                        onChange={(e) => setCombatFilter(e.target.value)}
+                        size="small"
+                        sx={{ minWidth: 240 }}
+                    >
+                        <MenuItem value="all">Todos os combates</MenuItem>
+                        <MenuItem value="none">Sem combate (livres)</MenuItem>
+                        {combats.map((c) => (
+                            <MenuItem key={c.id} value={c.id}>
+                                Round {c.round} — {c.participants.map((p) => p.character.name).join(", ")}
+                            </MenuItem>
+                        ))}
+                    </TextField>
 
                     <Button
                         variant="outlined"
@@ -105,114 +134,42 @@ export default function RecentRollsScreen() {
                     >
                         Atualizar
                     </Button>
-
-                    {loading ? (
-                        <Box display="flex" justifyContent="center" mt={4}>
-                            <CircularProgress />
-                        </Box>
-                    ) : (
-                        <Stack spacing={2}>
-                            {rolls.map((roll) => (
-                                <Card
-                                    key={roll.id}
-                                    sx={{
-                                        backgroundColor: "#1c1c2e",
-                                        border: roll.critical
-                                            ? "1px solid #ff9800"
-                                            : "1px solid #333",
-                                    }}
-                                >
-                                    <CardContent>
-                                        <Stack spacing={1.2}>
-                                            {/* Cabeçalho */}
-                                            <Typography fontWeight="bold">
-                                                {roll.character.name}
-                                            </Typography>
-
-                                            {roll.preset &&
-                                                <Typography fontSize={13} color="#aaa">
-                                                    {roll.preset.name} • {roll.preset.type}
-                                                </Typography>}
-
-                                            {/* Bloco do dado */}
-                                            <Box
-                                                sx={{
-                                                    mt: 1,
-                                                    p: 1.5,
-                                                    borderRadius: 1,
-                                                    backgroundColor: "#151525",
-                                                    border: roll.critical
-                                                        ? "1px solid #ff9800"
-                                                        : "1px solid #2a2a40",
-                                                }}
-                                            >
-                                                <Typography fontSize={14}>
-                                                    🎲 {roll.diceRolled} →{" "}
-                                                    <strong>{roll.rolls.join(", ")}</strong>
-                                                    {roll.modifier !== 0 && (
-                                                        <> {roll.modifier > 0 ? "+" : ""}{roll.modifier}</>
-                                                    )}
-                                                </Typography>
-
-                                                <Typography
-                                                    mt={0.5}
-                                                    fontSize={16}
-                                                    fontWeight="bold"
-                                                >
-                                                    Total: {roll.total}
-                                                    {roll.critical && " 🔥 CRÍTICO"}
-                                                </Typography>
-                                            </Box>
-
-                                            {/* Resultado */}
-                                            {roll.success && roll.preset.type != "TEST" && (roll.preset.type === "REACT" && (roll.combatId || roll.turnId)) &&
-                                                <Typography
-                                                    fontWeight="bold"
-                                                    color={roll.success ? "#66bb6a" : "#ef5350"}
-                                                >
-                                                    {roll.success ? "✅ Sucesso" : "❌ Falha"}
-                                                </Typography>
-                                            }
-
-                                            {/* Dano */}
-                                            {roll.damage !== null && (
-                                                <Typography color="#b94927" fontWeight="bold">
-                                                    💥 Dano: {roll.damage}
-                                                </Typography>
-                                            )}
-
-                                            {/* Cura */}
-                                            {roll.healing !== null && (
-                                                <Typography color="#4caf50" fontWeight="bold">
-                                                    💚 Cura: {roll.healing}
-                                                </Typography>
-                                            )}
-
-                                            {/* Reação */}
-                                            {roll.preset && roll.preset.type === "REACT" && roll.combatId != null && roll.turnId != null && (
-                                                <Typography fontSize={12} color="#90caf9">
-                                                    ⚡ Reação {roll.reacted ? "executada" : "pendente"}
-                                                </Typography>
-                                            )}
-
-                                            {/* Data */}
-                                            <Typography fontSize={11} color="#666">
-                                                {new Date(roll.createdAt).toLocaleString()}
-                                            </Typography>
-                                        </Stack>
-                                    </CardContent>
-                                </Card>
-                            ))}
-
-                            {rolls.length === 0 && (
-                                <Typography textAlign="center" color="#888">
-                                    Nenhum teste encontrado.
-                                </Typography>
-                            )}
-                        </Stack>
-                    )}
                 </Stack>
-            </Box>
+
+                {loading ? (
+                    <Box display="flex" justifyContent="center" mt={4}>
+                        <CircularProgress />
+                    </Box>
+                ) : (
+                    <Stack spacing={2}>
+                        {rolls.map((roll) => (
+                            <RollInfoCard
+                                key={roll.id}
+                                characterName={roll.character.name}
+                                actionName={roll.preset?.name}
+                                actionType={roll.preset?.type}
+                                diceFormula={roll.diceRolled}
+                                diceRolls={roll.rolls}
+                                modifier={roll.modifier}
+                                total={roll.total}
+                                critical={roll.critical}
+                                succeeded={roll.success}
+                                damage={roll.damage}
+                                healing={roll.healing}
+                                impactRolls={roll.impactRolls}
+                                impactFormula={roll.preset?.impactFormula}
+                                timestamp={roll.createdAt}
+                            />
+                        ))}
+
+                        {rolls.length === 0 && (
+                            <Typography textAlign="center" color="#888">
+                                Nenhuma rolagem encontrada.
+                            </Typography>
+                        )}
+                    </Stack>
+                )}
+            </Stack>
         </Box>
     );
 }

@@ -24,12 +24,13 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                         include: {
                             presets: true,
                             statusEffects: true,
+                            owner: { select: { role: true } },
                         },
                     },
                 },
             },
             turns: true,
-            logs: { include: { roll: { include: { character: true, preset: true } }, character: true, target: true } },
+            logs: { include: { roll: { select: { id: true, diceRolled: true, rolls: true, modifier: true, total: true, impactRolls: true, success: true, critical: true, damage: true, healing: true, pendingReaction: true, reacted: true } }, character: true, target: true } },
             rollResults: {
                 include: { character: true },
             },

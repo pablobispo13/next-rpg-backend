@@ -38,6 +38,8 @@ import { ActionLogCard } from "./ActionLogCard";
 import { CharacterHeaderCard } from "./CharacterHeaderCard";
 import { AttributeCard } from "../Jogador/AttributeCard";
 import { LifeBarCard } from "../Jogador/LifeBarCard";
+import { StreamPiP } from "../Stream/StreamPiP";
+import { useActiveStream } from "../../lib/useActiveStream";
 
 type Props = {
   characterLoaded: Character;
@@ -57,6 +59,7 @@ export function CharacterSheet({
   const [presetOpen, setPresetOpen] = useState(false);
   const canEdit = isMasterView || characterLoaded.owner?.role === "JOGADOR";
   const { combats } = useActiveCombats();
+  const activeStreamUrl = useActiveStream();
   const [character, setCharacter] = useState<Character>(characterLoaded);
   const [actionPresets, setActionPresets] = useState<ActionPresetType[]>([]);
   const [inventory, setInventory] = useState<CharacterInventory[]>([]);
@@ -124,6 +127,7 @@ export function CharacterSheet({
   }, [character.id]);
 
   return (
+    <>
     <Stack gap={2} sx={{ px: { xs: 1, sm: 2 } }}>
       <Head>
         <title>Ficha {character.name}</title>
@@ -353,6 +357,24 @@ export function CharacterSheet({
               </Stack>
             </Section>
 
+            {/* Habilidades Fora de Combate */}
+            {!loading && actionPresets.some((p) => p.allowOutOfCombat) && (
+              <Section title="Ações Fora de Combate">
+                <Stack direction="row" spacing={1.5} flexWrap="wrap">
+                  {actionPresets
+                    .filter((p) => p.allowOutOfCombat)
+                    .map((preset) => (
+                      <Roller
+                        key={preset.id}
+                        actionPresetId={preset.id}
+                        characterId={character.id}
+                        label={preset.name}
+                      />
+                    ))}
+                </Stack>
+              </Section>
+            )}
+
             {/* Habilidades / Presets */}
             <Section
               title="Habilidades"
@@ -495,5 +517,8 @@ export function CharacterSheet({
         />
       </Box>
     </Stack>
+
+    {activeStreamUrl && <StreamPiP streamUrl={activeStreamUrl} />}
+    </>
   );
 }

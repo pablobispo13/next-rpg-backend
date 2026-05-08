@@ -45,11 +45,12 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                     const char = await prisma.character.findUnique({ where: { id: p.characterId } });
                     const roll = rollDice("1d20");
                     const initiative = roll.total + (char?.agility ?? 0);
-                    return { id: p.id, characterId: p.characterId, initiative };
+                    return { id: p.id, characterId: p.characterId, initiative, agility: char?.agility ?? 0 };
                 })
             );
 
-            participantsWithInitiative.sort((a, b) => b.initiative - a.initiative);
+            // Desempate por Agilidade quando iniciativa for igual
+            participantsWithInitiative.sort((a, b) => b.initiative - a.initiative || b.agility - a.agility);
 
             await Promise.all(
                 participantsWithInitiative.map((p, index) =>
@@ -93,6 +94,15 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             const participant = combat.participants.find((p) => p.turnOrder === currentIndex);
             if (!participant) return res.status(400).json({ message: "Nenhum participante para a vez atual" });
 
+            // Idempotência: retorna turno já existente para evitar duplicatas
+            const existingTurn = await prisma.combatTurn.findFirst({
+                where: { combatId, characterId: participant.characterId, turnNumber: combat.round, endedAt: null },
+                include: { rollResults: true, logs: true },
+            });
+            if (existingTurn) {
+                return res.status(200).json(existingTurn);
+            }
+
             const turn = await prisma.combatTurn.create({
                 data: { combatId, characterId: participant.characterId, turnNumber: combat.round },
                 include: { rollResults: true, logs: true }
@@ -101,16 +111,20 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 where: { characterId: participant.characterId, remainingTurns: { gt: 0 } }
             });
 
+            const combatParticipantForEffect = await prisma.combatParticipant.findFirst({
+                where: { combatId, characterId: participant.characterId }
+            });
+
             for (const effect of activeEffects) {
                 const char = await prisma.character.findUnique({ where: { id: participant.characterId } });
                 if (!char) continue;
 
-                if (effect.type === "HEAL_OVER_TIME") {
-                    const newLife = Math.min(char.life + effect.value, char.maxLife);
-                    await prisma.character.update({ where: { id: char.id }, data: { life: newLife } });
+                if (effect.type === "HEAL_OVER_TIME" && combatParticipantForEffect) {
+                    const newLife = Math.min(combatParticipantForEffect.currentLife + effect.value, char.maxLife);
+                    await prisma.combatParticipant.update({ where: { id: combatParticipantForEffect.id }, data: { currentLife: newLife } });
                     await prisma.actionLog.create({
                         data: {
-                            type: LogType.HEAL,
+                            type: LogType.HEAL_OVER_TIME,
                             message: `${char.name} recuperou ${effect.value} de vida por efeito ativo`,
                             characterId: char.id,
                             combatId,
@@ -119,12 +133,12 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                     });
                 }
 
-                if (effect.type === "DAMAGE_OVER_TIME") {
-                    const newLife = Math.max(char.life - effect.value, 0);
-                    await prisma.character.update({ where: { id: char.id }, data: { life: newLife } });
+                if (effect.type === "DAMAGE_OVER_TIME" && combatParticipantForEffect) {
+                    const newLife = Math.max(combatParticipantForEffect.currentLife - effect.value, 0);
+                    await prisma.combatParticipant.update({ where: { id: combatParticipantForEffect.id }, data: { currentLife: newLife } });
                     await prisma.actionLog.create({
                         data: {
-                            type: LogType.DAMAGE,
+                            type: LogType.DAMAGE_OVER_TIME,
                             message: `${char.name} sofreu ${effect.value} de dano por efeito ativo`,
                             characterId: char.id,
                             combatId,
@@ -163,6 +177,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             res.status(201).json(turnFull);
             return;
         }
+
         case "endTurn": {
             if (!combatId || !turnId) {
                 return res.status(400).json({ message: "combatId e turnId são obrigatórios" });
@@ -175,29 +190,116 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 return res.status(400).json({ message: "Turno inválido para este combate" });
             }
 
-            const combat = await prisma.combat.findUnique({ where: { id: combatId }, include: { participants: true } });
+            const combat = await prisma.combat.findUnique({
+                where: { id: combatId },
+                include: { participants: true }
+            });
             if (!combat) return res.status(404).json({ message: "Combate não encontrado" });
 
+            // HP snapshot before advancing the index
+            const snapshotData: Record<string, number> = {};
+            for (const p of combat.participants) {
+                snapshotData[p.characterId] = p.currentLife;
+            }
+            const newSnapshot = { round: combat.round, turnIndex: combat.currentTurnIndex, data: snapshotData };
+            const updatedSnapshots = [...(combat.hpSnapshots as object[]), newSnapshot];
+
+            const sortedParticipants = [...combat.participants].sort((a, b) => (a.turnOrder ?? 0) - (b.turnOrder ?? 0));
             let nextIndex = combat.currentTurnIndex + 1;
             let nextRound = combat.round;
-            if (nextIndex >= combat.participants.length) {
-                nextIndex = 0;
-                nextRound += 1;
+
+            // Skip dead participants (currentLife <= 0)
+            for (let i = 0; i < sortedParticipants.length; i++) {
+                if (nextIndex >= sortedParticipants.length) {
+                    nextIndex = 0;
+                    nextRound += 1;
+                }
+                if (sortedParticipants[nextIndex].currentLife > 0) break;
+                nextIndex++;
             }
 
-            await prisma.combat.update({ where: { id: combatId }, data: { currentTurnIndex: nextIndex, round: nextRound } });
+            await prisma.combat.update({
+                where: { id: combatId },
+                data: { currentTurnIndex: nextIndex, round: nextRound, hpSnapshots: updatedSnapshots }
+            });
 
             await prisma.actionLog.create({
-                data: { type: LogType.TURN_END, message: `Turno finalizado`, combatId, turnId: turn.id, }
+                data: { type: LogType.TURN_END, message: `Turno finalizado`, combatId, turnId: turn.id }
             });
 
             await prisma.combatTurn.update({
                 where: { id: turn.id },
                 data: { endedAt: new Date() },
             });
-            // await notifyClients();
+
             res.status(200).json({ message: "Turno finalizado", nextTurnIndex: nextIndex, round: nextRound });
             return;
+        }
+
+        case "adjustHp": {
+            if (req.user?.role !== "MESTRE") {
+                return res.status(403).json({ message: "Apenas o mestre pode ajustar HP" });
+            }
+            const { characterId: hpCharId, newHp } = req.body;
+            if (!combatId || !hpCharId || newHp === undefined) {
+                return res.status(400).json({ message: "combatId, characterId e newHp são obrigatórios" });
+            }
+            const hpParticipant = await prisma.combatParticipant.findFirst({
+                where: { combatId, characterId: hpCharId },
+            });
+            if (!hpParticipant) return res.status(404).json({ message: "Participante não encontrado" });
+            const hpChar = await prisma.character.findUnique({ where: { id: hpCharId } });
+            const clampedHp = Math.max(0, Math.min(Number(newHp), hpChar?.maxLife ?? Number(newHp)));
+            await prisma.combatParticipant.update({
+                where: { id: hpParticipant.id },
+                data: { currentLife: clampedHp },
+            });
+            await prisma.actionLog.create({
+                data: {
+                    type: LogType.MANUAL_OVERRIDE,
+                    message: `HP de ${hpChar?.name} ajustado para ${clampedHp} pelo mestre`,
+                    characterId: hpCharId,
+                    combatId,
+                },
+            });
+            return res.status(200).json({ currentLife: clampedHp });
+        }
+
+        case "reorderTurns": {
+            if (req.user?.role !== "MESTRE") {
+                return res.status(403).json({ message: "Apenas o mestre pode reordenar" });
+            }
+            const { order } = req.body;
+            if (!combatId || !order) return res.status(400).json({ message: "Dados inválidos" });
+            await Promise.all(
+                (order as { participantId: string; turnOrder: number }[]).map((item) =>
+                    prisma.combatParticipant.update({
+                        where: { id: item.participantId },
+                        data: { turnOrder: item.turnOrder },
+                    })
+                )
+            );
+            return res.status(200).json({ message: "Ordem atualizada" });
+        }
+
+        case "updateNotes": {
+            if (req.user?.role !== "MESTRE") {
+                return res.status(403).json({ message: "Apenas o mestre pode editar notas" });
+            }
+            const { notes } = req.body;
+            if (!combatId) return res.status(400).json({ message: "combatId obrigatório" });
+            await prisma.combat.update({ where: { id: combatId }, data: { notes: notes ?? "" } });
+            return res.status(200).json({ message: "Notas atualizadas" });
+        }
+
+        case "setStreamUrl": {
+            if (req.user?.role !== "MESTRE") {
+                return res.status(403).json({ message: "Apenas o mestre pode configurar a stream" });
+            }
+            const { streamUrl } = req.body;
+            if (!combatId) return res.status(400).json({ message: "combatId obrigatório" });
+            await prisma.combat.update({ where: { id: combatId }, data: { streamUrl: streamUrl ?? null } });
+            return res.status(200).json({ message: "Stream atualizada" });
         }
 
         case "endCombat": {
@@ -205,7 +307,34 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
             await prisma.combat.update({ where: { id: combatId }, data: { active: false } });
             await prisma.actionLog.create({ data: { type: LogType.COMBAT_END, message: "Combate finalizado", combatId } });
-            res.status(200).json({ message: "Combate encerrado" });
+
+            // Compute combat statistics
+            const rollResults = await prisma.rollResult.findMany({
+                where: { combatId },
+                include: { character: { select: { id: true, name: true } } }
+            });
+
+            const statsByChar: Record<string, { name: string; totalDamage: number; hits: number; misses: number; maxHit: number }> = {};
+            for (const r of rollResults) {
+                const id = r.characterId;
+                if (!statsByChar[id]) {
+                    statsByChar[id] = { name: r.character.name, totalDamage: 0, hits: 0, misses: 0, maxHit: 0 };
+                }
+                if (r.success === true) statsByChar[id].hits++;
+                else if (r.success === false) statsByChar[id].misses++;
+                if (r.damage) {
+                    statsByChar[id].totalDamage += r.damage;
+                    statsByChar[id].maxHit = Math.max(statsByChar[id].maxHit, r.damage);
+                }
+            }
+
+            const combat = await prisma.combat.findUnique({ where: { id: combatId } });
+            const stats = {
+                rounds: combat?.round ?? 0,
+                participants: Object.entries(statsByChar).map(([id, s]) => ({ id, ...s })),
+            };
+
+            res.status(200).json({ message: "Combate encerrado", stats });
             return;
         }
 

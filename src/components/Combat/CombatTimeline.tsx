@@ -30,6 +30,7 @@ export type RollRef = {
     rolls: number[];
     modifier: number;
     total: number;
+    impactRolls?: number[];
 
     success?: boolean | null;
     critical: boolean;
@@ -39,8 +40,6 @@ export type RollRef = {
 
     pendingReaction?: boolean;
     reacted?: boolean;
-
-    targetDefense?: number | null;
 };
 
 export type CombatLog = {
@@ -48,10 +47,16 @@ export type CombatLog = {
 
     type:
     | "COMBAT_START"
+    | "COMBAT_END"
     | "TURN_START"
     | "TURN_END"
     | "ROLL"
     | "REACTION"
+    | "DAMAGE"
+    | "HEAL"
+    | "HEAL_OVER_TIME"
+    | "DAMAGE_OVER_TIME"
+    | "MANUAL_OVERRIDE"
     | "SYSTEM";
 
     message: string;
@@ -235,15 +240,24 @@ function ActionLine({
                             {r.critical && " (CRITICAL)"}
                         </Typography>
 
-                        {typeof r.targetDefense === "number" && (
+                        {typeof r.damage === "number" && (
                             <Typography fontSize={11}>
-                                🛡 Defesa do alvo: {r.targetDefense}
+                                💥 Dano:{" "}
+                                {r.impactRolls && r.impactRolls.length > 0
+                                    ? `[${r.impactRolls.join(", ")}] = `
+                                    : ""}
+                                {r.damage}
+                                {r.critical && " (crítico)"}
                             </Typography>
                         )}
 
-                        {typeof r.damage === "number" && (
+                        {typeof r.healing === "number" && r.healing > 0 && (
                             <Typography fontSize={11}>
-                                💥 Dano aplicado: {r.damage}
+                                💚 Cura:{" "}
+                                {r.impactRolls && r.impactRolls.length > 0
+                                    ? `[${r.impactRolls.join(", ")}] = `
+                                    : ""}
+                                {r.healing}
                             </Typography>
                         )}
 
@@ -287,19 +301,57 @@ function ActionLine({
 
                 <Typography fontSize={12} color={color} ml={2}>
                     🎲 {r.diceRolled} → {r.total}
-
                     {r.pendingReaction && " • Acertou, aguardando reação"}
                     {isFinalSuccess && " • Sucesso"}
                     {isFailure && " • Falhou"}
                     {r.critical && " • CRÍTICO"}
                 </Typography>
 
-                {typeof r.damage === "number" && !r.pendingReaction && (
+                {typeof r.damage === "number" && r.damage > 0 && !r.pendingReaction && (
                     <Typography fontSize={11} ml={4} color="#f87171">
-                        💥 Dano aplicado: {r.damage}
+                        💥 Dano: {r.impactRolls && r.impactRolls.length > 0 ? `[${r.impactRolls.join(", ")}] = ` : ""}{r.damage}
+                        {r.critical && " (crítico)"}
+                    </Typography>
+                )}
+
+                {typeof r.healing === "number" && r.healing > 0 && (
+                    <Typography fontSize={11} ml={4} color="#4ade80">
+                        💚 Cura: {r.impactRolls && r.impactRolls.length > 0 ? `[${r.impactRolls.join(", ")}] = ` : ""}{r.healing}
                     </Typography>
                 )}
             </Box>
+        );
+    }
+
+    if (log.type === "DAMAGE") {
+        return (
+            <Typography fontSize={12} color="#f87171" ml={2}>
+                💥 {log.message}
+            </Typography>
+        );
+    }
+
+    if (log.type === "DAMAGE_OVER_TIME") {
+        return (
+            <Typography fontSize={12} color="#fb923c" ml={2}>
+                🔥 {log.message}
+            </Typography>
+        );
+    }
+
+    if (log.type === "HEAL") {
+        return (
+            <Typography fontSize={12} color="#4ade80" ml={2}>
+                💚 {log.message}
+            </Typography>
+        );
+    }
+
+    if (log.type === "HEAL_OVER_TIME") {
+        return (
+            <Typography fontSize={12} color="#86efac" ml={2}>
+                ✨ {log.message}
+            </Typography>
         );
     }
 
@@ -315,6 +367,14 @@ function ActionLine({
         return (
             <Typography fontSize={11} color="#9ca3af" ml={1}>
                 ⏹ Turno encerrado
+            </Typography>
+        );
+    }
+
+    if (log.type === "MANUAL_OVERRIDE") {
+        return (
+            <Typography fontSize={11} color="#a78bfa" ml={2}>
+                ⚙️ {log.message}
             </Typography>
         );
     }

@@ -69,10 +69,8 @@ export const ThemeContextProvider: React.FC<ThemeContextProviderInterface> = ({
                             fontFamily: "'Rubik', sans-serif !important",
                         },
                         ".MuiAppBar-root": {
-                            background:
-                                mode === "dark"
-                                    ? "#4c5d77e3"
-                                    : "#06222fd1",
+                            // individual components override this via sx
+                            background: "transparent",
                         },
                         ".MuiMenuItem-root": {
                             borderRadius: "20px",

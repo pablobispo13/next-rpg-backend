@@ -16,6 +16,7 @@ import {
 import { useEffect, useState } from "react";
 import api from "../../lib/api";
 import { ActionPresetType } from "../../types/types";
+import { validateDiceFormula } from "../../lib/dice";
 
 type Props = {
     open: boolean;
@@ -44,6 +45,7 @@ export function PresetModal({
         requiresTurn: true,
         allowOutOfCombat: false,
         appliesEffect: false,
+        isAreaEffect: false,
         durationTurns: "",
         statAffected: "",
         effectAmount: "",
@@ -66,6 +68,7 @@ export function PresetModal({
                 requiresTurn: preset.requiresTurn ?? true,
                 allowOutOfCombat: preset.allowOutOfCombat ?? false,
                 appliesEffect: preset.appliesEffect ?? false,
+                isAreaEffect: preset.isAreaEffect ?? false,
                 durationTurns: preset.durationTurns?.toString() ?? "",
                 statAffected: preset.statAffected ?? "",
                 effectAmount: preset.effectAmount?.toString() ?? "",
@@ -74,10 +77,21 @@ export function PresetModal({
         }
     }, [preset, open]);
 
-    const update = (key: string, value: string | number | boolean) =>
+    const [diceError, setDiceError] = useState<string | null>(null);
+    const [impactError, setImpactError] = useState<string | null>(null);
+
+    const update = (key: string, value: string | number | boolean) => {
         setForm((prev) => ({ ...prev, [key]: value }));
+        if (key === "diceFormula") setDiceError(null);
+        if (key === "impactFormula") setImpactError(null);
+    };
 
     const handleSave = async () => {
+        const diceErr = validateDiceFormula(form.diceFormula);
+        const impactErr = form.impactFormula ? validateDiceFormula(form.impactFormula) : null;
+        if (diceErr) { setDiceError(diceErr); return; }
+        if (impactErr) { setImpactError(impactErr); return; }
+
         if (preset?.id) {
             await api.put(`/actionPreset/${preset?.id}`, {
                 ...form,
@@ -118,6 +132,7 @@ export function PresetModal({
             requiresTurn: true,
             allowOutOfCombat: false,
             appliesEffect: false,
+            isAreaEffect: false,
             durationTurns: "",
             statAffected: "",
             effectAmount: "",
@@ -127,7 +142,7 @@ export function PresetModal({
     };
 
     return (
-        <Dialog open={open} onClose={(event, reason) => {
+        <Dialog open={open} onClose={(_event, reason) => {
             if (reason !== 'backdropClick') {
                 setForm({
                     name: "",
@@ -143,6 +158,7 @@ export function PresetModal({
                     requiresTurn: true,
                     allowOutOfCombat: false,
                     appliesEffect: false,
+                    isAreaEffect: false,
                     durationTurns: "",
                     statAffected: "",
                     effectAmount: "",
@@ -177,14 +193,29 @@ export function PresetModal({
                             <MenuItem value="ENEMY">Inimigo</MenuItem>
                             <MenuItem value="ALLY">Aliado</MenuItem>
                             <MenuItem value="SELF">Em si mesmo</MenuItem>
+                            <MenuItem value="MULTIPLE">Múltiplos alvos</MenuItem>
                         </TextField>
                     </Stack>
 
                     <Stack direction="row" spacing={2}>
-                        <TextField label="Fórmula de Dado" disabled value={form.diceFormula} onChange={e => update("diceFormula", e.target.value)} fullWidth />
-                        {form.type === "REACT" || form.type === "ATTACK" || form.type === "SUPPORT" ?
-                            <TextField label="Fórmula da ação" value={form.impactFormula} onChange={e => update("impactFormula", e.target.value)} fullWidth />
-                            : undefined}
+                        <TextField
+                            label="Fórmula de Dado"
+                            value={form.diceFormula}
+                            onChange={e => update("diceFormula", e.target.value)}
+                            error={!!diceError}
+                            helperText={diceError ?? "Ex: 1d20, 1d8+2+1d6-1"}
+                            fullWidth
+                        />
+                        {form.type === "REACT" || form.type === "ATTACK" || form.type === "SUPPORT" ? (
+                            <TextField
+                                label="Fórmula da ação"
+                                value={form.impactFormula}
+                                onChange={e => update("impactFormula", e.target.value)}
+                                error={!!impactError}
+                                helperText={impactError ?? "Ex: 2d6+3, 1d8+1d4"}
+                                fullWidth
+                            />
+                        ) : undefined}
                         <TextField select label="Atributo" value={form.attribute} onChange={e => update("attribute", e.target.value)} fullWidth>
                             <MenuItem value="STRENGTH">Força</MenuItem>
                             <MenuItem value="AGILITY">Agilidade</MenuItem>
@@ -207,6 +238,9 @@ export function PresetModal({
                     {/* Regras */}
                     <FormControlLabel control={<Switch checked={form.requiresTurn} onChange={e => update("requiresTurn", e.target.checked)} />} label="Consome turno" />
                     <FormControlLabel control={<Switch checked={form.allowOutOfCombat} onChange={e => update("allowOutOfCombat", e.target.checked)} />} label="Pode usar fora de combate" />
+                    {(form.targetType === "MULTIPLE" || form.targetType === "ENEMY") && (
+                        <FormControlLabel control={<Switch checked={form.isAreaEffect} onChange={e => update("isAreaEffect", e.target.checked)} />} label="Habilidade em área / múltiplos alvos" />
+                    )}
                     {/* <FormControlLabel control={<Switch checked={form.appliesEffect} onChange={e => update("appliesEffect", e.target.checked)} />} label="Aplica efeito" /> */}
 
                     {/* Efeitos
@@ -241,6 +275,7 @@ export function PresetModal({
                         requiresTurn: true,
                         allowOutOfCombat: false,
                         appliesEffect: false,
+                        isAreaEffect: false,
                         durationTurns: "",
                         statAffected: "",
                         effectAmount: "",
