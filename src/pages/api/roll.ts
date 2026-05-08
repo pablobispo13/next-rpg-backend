@@ -205,6 +205,20 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
     const pendingReactionTargets: Array<{ targetId: string; status: "PENDING" }> = [];
 
+    // Dano é rolado UMA vez e aplicado a todos os alvos
+    let impactTotal: number | null = null;
+    let impactRolls: number[] = [];
+
+    if (preset.impactFormula) {
+        const impactRoll = rollDice(preset.impactFormula);
+        impactRolls = impactRoll.rolls;
+        impactTotal = impactRoll.total + effectiveAttribute;
+
+        if (isCritical && preset.critMultiplier) {
+            impactTotal = Math.floor(impactTotal * preset.critMultiplier);
+        }
+    }
+
     for (const targetId of resolvedTargetIds) {
 
         const target = await prisma.character.findUnique({
@@ -277,23 +291,6 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 target.blockPresetId ||
                 target.counterAttackPresetId
             );
-
-        let impactTotal: number | null = null;
-        let impactRolls: number[] = [];
-
-        if (preset.impactFormula) {
-
-            const impactRoll = rollDice(preset.impactFormula);
-            impactRolls = impactRoll.rolls;
-
-            impactTotal = impactRoll.total + effectiveAttribute;
-
-            if (isCritical && preset.critMultiplier) {
-                impactTotal = Math.floor(
-                    impactTotal * preset.critMultiplier
-                );
-            }
-        }
 
         // Aplica dano/cura automático em combate
         let afterLife = beforeLife;

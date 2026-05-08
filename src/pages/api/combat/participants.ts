@@ -3,6 +3,7 @@ import { authenticate, AuthenticatedRequest } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 import { rollDice } from "../../../lib/dice";
 import { LogType } from "@prisma/client";
+import { notifyCombatUpdate } from "../../../lib/pusher";
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     if (req.method !== "POST") {
@@ -71,6 +72,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         },
     });
 
+    notifyCombatUpdate(combatId);
     return res.status(201).json({ participant: newParticipant });
 }
 

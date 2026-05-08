@@ -250,11 +250,15 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
   }
 
 
-  /* ---- sync ordered list ---- */
+  /* ---- sync ordered list (skip during active drag to avoid ghost animation) ---- */
   useEffect(() => {
-    if (!combat) return;
+    if (!combat || draggedRef.current) return;
     const sorted = [...combat.participants].sort((a: any, b: any) => a.turnOrder - b.turnOrder);
-    setOrderedParticipants(sorted);
+    setOrderedParticipants((prev) => {
+      const prevIds = prev.map((p: any) => p.id).join(",");
+      const newIds = sorted.map((p: any) => p.id).join(",");
+      return prevIds === newIds ? prev : sorted;
+    });
   }, [combat?.participants]);
 
   /* ---- detect HP changes for floating numbers ---- */
@@ -344,9 +348,16 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
   async function handleReorderEnd() {
     if (!draggedRef.current || !isMaster) return;
     draggedRef.current = false;
+
+    const newOrder = orderedParticipants.map((p: any, i: number) => ({ participantId: p.id, turnOrder: i }));
+
+    // Atualiza turnOrder localmente de forma optimista para que o useEffect de sync
+    // não cause re-animação quando o servidor confirmar a mesma ordem
+    setOrderedParticipants((prev) => prev.map((p: any, i: number) => ({ ...p, turnOrder: i })));
+
     await api.post("/combat/control", {
       action: "reorderTurns", combatId: combat.id,
-      order: orderedParticipants.map((p: any, i: number) => ({ participantId: p.id, turnOrder: i })),
+      order: newOrder,
     });
     await refreshCombat();
   }
