@@ -152,6 +152,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             },
         });
 
+        if (attackRoll.combatId) notifyCombatUpdate(attackRoll.combatId);
         return res.status(200).json({ success: false, skipped: true });
     }
     else {

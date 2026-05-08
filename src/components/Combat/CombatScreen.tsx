@@ -347,19 +347,20 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
 
   async function handleReorderEnd() {
     if (!draggedRef.current || !isMaster) return;
-    draggedRef.current = false;
 
     const newOrder = orderedParticipants.map((p: any, i: number) => ({ participantId: p.id, turnOrder: i }));
 
-    // Atualiza turnOrder localmente de forma optimista para que o useEffect de sync
-    // não cause re-animação quando o servidor confirmar a mesma ordem
-    setOrderedParticipants((prev) => prev.map((p: any, i: number) => ({ ...p, turnOrder: i })));
-
-    await api.post("/combat/control", {
-      action: "reorderTurns", combatId: combat.id,
-      order: newOrder,
-    });
-    await refreshCombat();
+    try {
+      await api.post("/combat/control", {
+        action: "reorderTurns", combatId: combat.id,
+        order: newOrder,
+      });
+      await refreshCombat();
+    } finally {
+      // Clear AFTER the refresh so the useEffect doesn't reset the order
+      // from stale Pusher data that may arrive during the API call
+      draggedRef.current = false;
+    }
   }
 
   function exportLog() {
