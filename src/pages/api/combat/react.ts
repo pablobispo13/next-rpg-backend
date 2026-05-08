@@ -12,10 +12,10 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     }
 
     const user = req.user!;
-    const { rollId, reactionType, characterId, turnId } = req.body;
+    const { rollId, reactionType, targetId, turnId } = req.body;
 
-    if (!rollId || !reactionType || !characterId)
-        return res.status(400).json({ message: "Dados obrigatórios ausentes" });
+    if (!rollId || !reactionType || !targetId)
+        return res.status(400).json({ message: "rollId, reactionType, targetId são obrigatórios" });
 
     if (turnId) {
         const turn = await prisma.combatTurn.findUnique({
@@ -30,11 +30,11 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         include: { preset: true },
     });
 
-    if (!attackRoll || !attackRoll.pendingReaction || attackRoll.reacted)
+    if (!attackRoll || !attackRoll.pendingReactionTargets || attackRoll.pendingReactionTargets.length === 0 || attackRoll.reacted)
         return res.status(400).json({ message: "Reação inválida" });
 
     const target = await prisma.character.findUnique({
-        where: { id: characterId },
+        where: { id: targetId },
     });
     if (!target)
         return res.status(404).json({ message: "Alvo não encontrado" });
@@ -48,7 +48,50 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     if (!attacker)
         return res.status(404).json({ message: "Atacante não encontrado" });
 
+    // Busca participantes do combate para atualizar currentLife em vez de character.life
+    const targetParticipant = attackRoll.combatId
+        ? await prisma.combatParticipant.findFirst({
+            where: { combatId: attackRoll.combatId, characterId: target.id },
+        })
+        : null;
+
+    const attackerParticipant = attackRoll.combatId
+        ? await prisma.combatParticipant.findFirst({
+            where: { combatId: attackRoll.combatId, characterId: attacker.id },
+        })
+        : null;
+
     const damage = attackRoll.damage ?? 0;
+
+    async function applyDamageToTarget(amount: number) {
+        if (targetParticipant) {
+            const newLife = Math.max(0, targetParticipant.currentLife - amount);
+            await prisma.combatParticipant.update({
+                where: { id: targetParticipant.id },
+                data: { currentLife: newLife },
+            });
+        } else {
+            await prisma.character.update({
+                where: { id: target!.id },
+                data: { life: { decrement: amount } },
+            });
+        }
+    }
+
+    async function applyDamageToAttacker(amount: number) {
+        if (attackerParticipant) {
+            const newLife = Math.max(0, attackerParticipant.currentLife - amount);
+            await prisma.combatParticipant.update({
+                where: { id: attackerParticipant.id },
+                data: { currentLife: newLife },
+            });
+        } else {
+            await prisma.character.update({
+                where: { id: attacker!.id },
+                data: { life: { decrement: amount } },
+            });
+        }
+    }
 
     let reactionPresetId: string;
 
@@ -74,21 +117,20 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         reactionPresetId = target.counterAttackPresetId;
     }
     else if (reactionType === "SKIP") {
+        await applyDamageToTarget(damage);
 
-        await prisma.character.update({
-            where: { id: target.id },
-            data: {
-                life: {
-                    decrement: damage,
-                },
-            },
-        });
+        const updatedTargets = (attackRoll.pendingReactionTargets as any).map((rt: any) =>
+            rt.targetId === targetId ? { ...rt, status: "REACTED" } : rt
+        );
+
+        const allReacted = updatedTargets.every((rt: any) => rt.status !== "PENDING");
 
         await prisma.rollResult.update({
             where: { id: attackRoll.id },
             data: {
-                reacted: true,
-                pendingReaction: false,
+                pendingReactionTargets: updatedTargets,
+                reacted: allReacted,
+                pendingReaction: !allReacted,
             },
         });
 
@@ -109,6 +151,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     else {
         return res.status(400).json({ message: "Reação inválida" });
     }
+
     const preset = await prisma.actionPreset.findUnique({
         where: { id: reactionPresetId },
     });
@@ -133,49 +176,22 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         reactionSuccess = reactionRollData.total >= attackRoll.total;
 
         if (reactionSuccess) {
-            // Contra-ataque vence
             if (!preset.impactFormula) {
                 return res.status(400).json({ message: "Contra-ataque sem impactFormula configurado" });
             }
             const impactRoll = rollDice(preset.impactFormula);
             const counterDamage = impactRoll.total + (target.strength || 0);
-            await prisma.character.update({
-                where: { id: attacker.id },
-                data: {
-                    life: {
-                        decrement: counterDamage,
-                    },
-                },
-            });
-
-            finalMessage = `${target.name} contra-atacou com sucesso (${reactionRollData.total} vs ${attackRoll.total}) e causou ${counterDamage} de dano (${impactRoll.total} + ${target.strength || 0} força) em ${attacker.name}`;
+            await applyDamageToAttacker(counterDamage);
+            finalMessage = `${target.name} contra-atacou com sucesso (${reactionRollData.total} vs ${attackRoll.total}) e causou ${counterDamage} de dano em ${attacker.name}`;
         } else {
-            // Ataque original vence
-            await prisma.character.update({
-                where: { id: target.id },
-                data: {
-                    life: {
-                        decrement: damage,
-                    },
-                },
-            });
-
+            await applyDamageToTarget(damage);
             finalMessage = `${target.name} falhou no contra-ataque (${reactionTotal} vs ${attackRoll.total}) e sofreu ${damage} de dano`;
         }
     } else {
-
         reactionSuccess = reactionTotal >= attackRoll.total;
 
         if (!reactionSuccess) {
-            await prisma.character.update({
-                where: { id: target.id },
-                data: {
-                    life: {
-                        decrement: damage,
-                    },
-                },
-            });
-
+            await applyDamageToTarget(damage);
             finalMessage = `${target.name} falhou ao tentar ${reactionType} (${reactionTotal} vs ${attackRoll.total}) e sofreu ${damage} de dano`;
         } else {
             finalMessage = `${target.name} teve sucesso ao tentar ${reactionType} (${reactionTotal} vs ${attackRoll.total}) e evitou o dano`;
@@ -202,13 +218,20 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     });
 
     /* =========================
-       FINALIZA ROLL DE ATAQUE
+       ATUALIZA STATUS DO ALVO E VERIFICA FIM DA FILA
     ========================= */
+    const updatedTargets = (attackRoll.pendingReactionTargets as any).map((rt: any) =>
+        rt.targetId === targetId ? { ...rt, status: "REACTED" } : rt
+    );
+
+    const allReacted = updatedTargets.every((rt: any) => rt.status !== "PENDING");
+
     await prisma.rollResult.update({
         where: { id: attackRoll.id },
         data: {
-            reacted: true,
-            pendingReaction: false,
+            pendingReactionTargets: updatedTargets,
+            reacted: allReacted,
+            pendingReaction: !allReacted,
         },
     });
 

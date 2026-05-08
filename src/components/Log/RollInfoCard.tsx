@@ -17,6 +17,8 @@ interface RollInfoCardProps {
   succeeded?: boolean;
   damage?: number | null;
   healing?: number | null;
+  impactRolls?: number[];
+  impactFormula?: string | null;
   targetDefense?: number | null;
   timestamp?: string;
   compact?: boolean;
@@ -34,6 +36,8 @@ export function RollInfoCard({
   succeeded,
   damage,
   healing,
+  impactRolls,
+  impactFormula,
   targetDefense,
   timestamp,
   compact = false,
@@ -163,21 +167,36 @@ export function RollInfoCard({
             </Stack>
           </Box>
 
-          {/* Damage if exists */}
+          {/* Damage breakdown */}
           {damage && damage > 0 && (
-            <Box sx={{ p: 1, backgroundColor: "#f8717120", borderRadius: 1 }}>
-              <Typography variant="caption" sx={{ color: "#f87171", fontWeight: 600, fontFamily: "monospace" }}>
-                🗡️ Dano: {damage}
-              </Typography>
+            <Box sx={{ p: compact ? 1 : 1.5, backgroundColor: "#f8717120", borderRadius: 1, border: "1px solid #f8717140" }}>
+              <Stack spacing={compact ? 0.2 : 0.4}>
+                <Typography variant="caption" sx={{ color: "#f87171", fontWeight: 700, fontFamily: "monospace" }}>
+                  🗡️ Dano: {damage}
+                </Typography>
+                {impactFormula && impactRolls && impactRolls.length > 0 && (
+                  <Typography sx={{ fontFamily: "monospace", fontSize: compact ? 10 : 11, color: "#fca5a5", pl: 1.5, borderLeft: "2px solid #f87171" }}>
+                    {impactFormula} ({impactRolls.join(", ")}) = {impactRolls.reduce((a, b) => a + b, 0)}
+                    {critical && " × crítico"}
+                  </Typography>
+                )}
+              </Stack>
             </Box>
           )}
 
-          {/* Healing if exists */}
+          {/* Healing breakdown */}
           {healing && healing > 0 && (
-            <Box sx={{ p: 1, backgroundColor: "#4ade8020", borderRadius: 1 }}>
-              <Typography variant="caption" sx={{ color: "#4ade80", fontWeight: 600, fontFamily: "monospace" }}>
-                💚 Cura: {healing}
-              </Typography>
+            <Box sx={{ p: compact ? 1 : 1.5, backgroundColor: "#4ade8020", borderRadius: 1, border: "1px solid #4ade8040" }}>
+              <Stack spacing={compact ? 0.2 : 0.4}>
+                <Typography variant="caption" sx={{ color: "#4ade80", fontWeight: 700, fontFamily: "monospace" }}>
+                  💚 Cura: {healing}
+                </Typography>
+                {impactFormula && impactRolls && impactRolls.length > 0 && (
+                  <Typography sx={{ fontFamily: "monospace", fontSize: compact ? 10 : 11, color: "#86efac", pl: 1.5, borderLeft: "2px solid #4ade80" }}>
+                    {impactFormula} ({impactRolls.join(", ")}) = {impactRolls.reduce((a, b) => a + b, 0)}
+                  </Typography>
+                )}
+              </Stack>
             </Box>
           )}
 

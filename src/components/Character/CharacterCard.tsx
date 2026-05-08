@@ -25,14 +25,17 @@ type Props = {
   character: Character;
   onAcess: () => void;
   onDelete?: () => void;
+  onClone?: () => void;
 };
 
 export function CharacterCard({
   character,
   onAcess = () => {},
   onDelete,
+  onClone,
 }: Props) {
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
+  const [cloning, setCloning] = useState(false);
 
   const handleDelete = async () => {
     try {
@@ -44,6 +47,19 @@ export function CharacterCard({
       const axiosError = error as Record<string, Record<string, unknown>>;
       console.log("Erro ao deletar personagem:", axiosError);
       toast.error("Erro ao deletar personagem");
+    }
+  };
+
+  const handleClone = async () => {
+    try {
+      setCloning(true);
+      await api.post(`/characters/${character.id}`);
+      toast.success(`Cópia de "${character.name}" criada`);
+      onClone?.();
+    } catch {
+      toast.error("Erro ao clonar personagem");
+    } finally {
+      setCloning(false);
     }
   };
 
@@ -157,6 +173,17 @@ export function CharacterCard({
         >
           Acessar Ficha
         </Button>
+        {onClone && (
+          <Button
+            variant="outlined"
+            size="small"
+            title="Clonar personagem"
+            disabled={cloning}
+            onClick={handleClone}
+          >
+            📋
+          </Button>
+        )}
         <Button
           variant="outlined"
           size="small"

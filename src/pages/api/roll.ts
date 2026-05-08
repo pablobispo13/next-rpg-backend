@@ -13,7 +13,11 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         try {
             const rolls = await prisma.rollResult.findMany({
                 where: {
-                    ...(combatId ? { combatId: String(combatId) } : {}),
+                    ...(combatId === "none"
+                        ? { combatId: null }
+                        : combatId
+                            ? { combatId: String(combatId) }
+                            : {}),
                     ...(characterId ? { characterId: String(characterId) } : {}),
                 },
                 include: {
@@ -21,7 +25,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                         select: { id: true, name: true },
                     },
                     preset: {
-                        select: { id: true, name: true, type: true },
+                        select: { id: true, name: true, type: true, impactFormula: true },
                     },
                 },
                 orderBy: {
@@ -198,6 +202,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
        RESOLUÇÃO POR ALVO
     ===================================================== */
 
+    const pendingReactionTargets: Array<{ targetId: string; status: "PENDING" }> = [];
+
     for (const targetId of resolvedTargetIds) {
 
         const target = await prisma.character.findUnique({
@@ -291,19 +297,39 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         // Aplica dano/cura automático em combate
         let afterLife = beforeLife;
 
-        if (combatParticipant && impactTotal) {
-            if (preset.type === ActionType.ATTACK) {
-                afterLife = Math.max(0, beforeLife - impactTotal);
-                await prisma.combatParticipant.update({
-                    where: { id: combatParticipant.id },
-                    data: { currentLife: afterLife },
-                });
-            } else if (preset.type === ActionType.HEAL) {
-                afterLife = Math.min(target.maxLife, beforeLife + impactTotal);
-                await prisma.combatParticipant.update({
-                    where: { id: combatParticipant.id },
-                    data: { currentLife: afterLife },
-                });
+        const isHealType = preset.type === ActionType.HEAL || preset.type === ActionType.SUPPORT;
+
+        if (impactTotal) {
+            if (combatParticipant) {
+                // Em combate: atualiza HP do participante
+                if (preset.type === ActionType.ATTACK && !shouldOpenReaction) {
+                    afterLife = Math.max(0, beforeLife - impactTotal);
+                    await prisma.combatParticipant.update({
+                        where: { id: combatParticipant.id },
+                        data: { currentLife: afterLife },
+                    });
+                } else if (isHealType) {
+                    afterLife = Math.min(target.maxLife, beforeLife + impactTotal);
+                    await prisma.combatParticipant.update({
+                        where: { id: combatParticipant.id },
+                        data: { currentLife: afterLife },
+                    });
+                }
+            } else {
+                // Fora de combate: atualiza diretamente character.life
+                if (preset.type === ActionType.ATTACK) {
+                    afterLife = Math.max(0, target.life - impactTotal);
+                    await prisma.character.update({
+                        where: { id: targetId },
+                        data: { life: afterLife },
+                    });
+                } else if (isHealType) {
+                    afterLife = Math.min(target.maxLife, target.life + impactTotal);
+                    await prisma.character.update({
+                        where: { id: targetId },
+                        data: { life: afterLife },
+                    });
+                }
             }
         }
 
@@ -316,12 +342,16 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 succeeded: true,
                 critical: isCritical,
                 damageApplied:
-                    preset.type === ActionType.ATTACK ? impactTotal : null,
+                    preset.type === ActionType.ATTACK && !shouldOpenReaction ? impactTotal : null,
                 healingApplied:
-                    preset.type === ActionType.HEAL ? impactTotal : null,
+                    isHealType ? impactTotal : null,
                 targetDefense: target.baseDefense ?? 0,
             },
         });
+
+        if (shouldOpenReaction) {
+            pendingReactionTargets.push({ targetId, status: "PENDING" });
+        }
 
         await prisma.rollResult.update({
             where: { id: roll.id },
@@ -334,7 +364,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                         ? impactTotal
                         : null,
                 healing:
-                    preset.type === ActionType.HEAL
+                    isHealType
                         ? impactTotal
                         : null,
             },
@@ -364,7 +394,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             const damageMessage =
                 preset.type === ActionType.ATTACK
                     ? `${target.name} recebeu ${impactTotal} de dano`
-                    : `${target.name} foi curado em ${impactTotal}`;
+                    : `${target.name} foi curado em ${impactTotal} por ${preset.name}`;
 
             await prisma.actionLog.create({
                 data: {
@@ -411,6 +441,16 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 },
             });
         }
+    }
+
+    // Atualiza roll com todos os alvos pendentes de reação
+    if (pendingReactionTargets.length > 0) {
+        await prisma.rollResult.update({
+            where: { id: roll.id },
+            data: {
+                pendingReactionTargets: pendingReactionTargets as any,
+            },
+        });
     }
 
     return res.status(201).json({ roll });

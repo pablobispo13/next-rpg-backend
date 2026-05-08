@@ -6,6 +6,8 @@ import {
     CircularProgress,
     Button,
     Typography,
+    MenuItem,
+    TextField,
 } from "@mui/material";
 import { useEffect, useState } from "react";
 import api from "../lib/api";
@@ -23,6 +25,7 @@ type Roll = {
     rolls: number[];
     modifier: number;
     total: number;
+    impactRolls: number[];
 
     success: boolean;
     critical: boolean;
@@ -45,19 +48,37 @@ type Roll = {
         id: string;
         name: string;
         type: string;
-    };
+        impactFormula: string | null;
+    } | null;
+};
+
+type CombatOption = {
+    id: string;
+    round: number;
+    createdAt: string;
+    participants: { character: { name: string } }[];
 };
 
 export default function RecentRollsScreen() {
     const [rolls, setRolls] = useState<Roll[]>([]);
     const [loading, setLoading] = useState(true);
+    const [combatFilter, setCombatFilter] = useState<string>("all");
+    const [combats, setCombats] = useState<CombatOption[]>([]);
+
+    useEffect(() => {
+        api.get("/combat/active")
+            .then((res) => setCombats(Array.isArray(res.data) ? res.data : []))
+            .catch(() => setCombats([]));
+    }, []);
 
     async function loadRolls() {
         try {
             setLoading(true);
-            const res = await api.get("/roll?limit=30");
+            const params: Record<string, string | number> = { limit: 30 };
+            if (combatFilter !== "all") params.combatId = combatFilter;
+            const res = await api.get("/roll", { params });
             setRolls(
-                res.data.rolls.sort(
+                (res.data.rolls ?? []).sort(
                     (a: Roll, b: Roll) =>
                         new Date(b.createdAt).getTime() -
                         new Date(a.createdAt).getTime()
@@ -72,7 +93,7 @@ export default function RecentRollsScreen() {
 
     useEffect(() => {
         loadRolls();
-    }, []);
+    }, [combatFilter]);
 
     return (
         <Box
@@ -88,13 +109,32 @@ export default function RecentRollsScreen() {
                     Rolagens Recentes
                 </Typography>
 
-                <Button
-                    variant="outlined"
-                    onClick={loadRolls}
-                    disabled={loading}
-                >
-                    Atualizar
-                </Button>
+                <Stack direction="row" spacing={2} alignItems="center">
+                    <TextField
+                        select
+                        label="Filtrar por Combate"
+                        value={combatFilter}
+                        onChange={(e) => setCombatFilter(e.target.value)}
+                        size="small"
+                        sx={{ minWidth: 240 }}
+                    >
+                        <MenuItem value="all">Todos os combates</MenuItem>
+                        <MenuItem value="none">Sem combate (livres)</MenuItem>
+                        {combats.map((c) => (
+                            <MenuItem key={c.id} value={c.id}>
+                                Round {c.round} — {c.participants.map((p) => p.character.name).join(", ")}
+                            </MenuItem>
+                        ))}
+                    </TextField>
+
+                    <Button
+                        variant="outlined"
+                        onClick={loadRolls}
+                        disabled={loading}
+                    >
+                        Atualizar
+                    </Button>
+                </Stack>
 
                 {loading ? (
                     <Box display="flex" justifyContent="center" mt={4}>
@@ -116,6 +156,8 @@ export default function RecentRollsScreen() {
                                 succeeded={roll.success}
                                 damage={roll.damage}
                                 healing={roll.healing}
+                                impactRolls={roll.impactRolls}
+                                impactFormula={roll.preset?.impactFormula}
                                 timestamp={roll.createdAt}
                             />
                         ))}

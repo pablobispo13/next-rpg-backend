@@ -64,6 +64,7 @@ export type ActionPresetType = {
     requiresTurn?: boolean;
     allowOutOfCombat?: boolean;
     appliesEffect?: boolean;
+    isAreaEffect?: boolean;
     durationTurns?: number | null;
     statAffected?: string | null;
     effectAmount?: number | null;
@@ -79,22 +80,28 @@ export type CharacterStatusEffect = {
 export type Roll = {
     id: string;
     type: string;
-    total: number
-    modifier: number
-    rolls: number[]
-    damage: number
-    sucess: boolean
+    total: number;
+    modifier: number;
+    rolls: number[];
+    damage?: number | null;
+    healing?: number | null;
+    sucess?: boolean | null;
+    success?: boolean | null;
+    critical?: boolean | null;
     diceRolled?: string;
+    impactRolls?: number[];
     createdAt?: string;
-    preset: ActionPresetType
-    reactionType?: "DODGE" | "COUNTER_ATTACK" | "BLOCK" | "SKIP"
-
+    preset?: ActionPresetType | null;
+    reactionType?: "DODGE" | "COUNTER_ATTACK" | "BLOCK" | "SKIP";
 };
+
 export type ActionLog = {
     id: string;
     type: string;
-    message: string
-    roll?: Roll
+    message: string;
+    roll?: Roll;
+    character?: { id: string; name: string } | null;
+    target?: { id: string; name: string } | null;
 };
 export const Character_Attributes = [
     { key: "strength", label: "Força" },

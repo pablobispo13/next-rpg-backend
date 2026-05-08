@@ -97,6 +97,87 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     return;
   }
 
+  // CLONAR PERSONAGEM
+  if (req.method === "POST") {
+    if (user.role !== "MESTRE") {
+      res.status(403).json({ message: "Apenas o mestre pode clonar personagens" });
+      return;
+    }
+
+    const source = await prisma.character.findUnique({
+      where: { id },
+      include: { presets: true },
+    });
+    if (!source) {
+      res.status(404).json({ message: "Personagem não encontrado" });
+      return;
+    }
+
+    const cloned = await prisma.character.create({
+      data: {
+        name: `Cópia de ${source.name}`,
+        life: source.life,
+        maxLife: source.maxLife,
+        xp: source.xp,
+        strength: source.strength,
+        agility: source.agility,
+        vigor: source.vigor,
+        intellect: source.intellect,
+        presence: source.presence,
+        baseDefense: source.baseDefense,
+        history: source.history,
+        notes: source.notes,
+        image: source.image,
+        ownerId: source.ownerId,
+        dodgePresetId: null,
+        blockPresetId: null,
+        counterAttackPresetId: null,
+      },
+    });
+
+    // Clone action presets and map old IDs → new IDs
+    const presetIdMap: Record<string, string> = {};
+    for (const p of source.presets) {
+      const newPreset = await prisma.actionPreset.create({
+        data: {
+          name: p.name,
+          description: p.description,
+          type: p.type,
+          targetType: p.targetType,
+          diceFormula: p.diceFormula,
+          impactFormula: p.impactFormula,
+          modifier: p.modifier,
+          critThreshold: p.critThreshold,
+          critMultiplier: p.critMultiplier,
+          requiresTurn: p.requiresTurn,
+          allowOutOfCombat: p.allowOutOfCombat,
+          appliesEffect: p.appliesEffect,
+          isAreaEffect: p.isAreaEffect,
+          attribute: p.attribute,
+          durationTurns: p.durationTurns,
+          statAffected: p.statAffected,
+          effectAmount: p.effectAmount,
+          statusApplied: p.statusApplied,
+          characterId: cloned.id,
+        },
+      });
+      presetIdMap[p.id] = newPreset.id;
+    }
+
+    // Re-link reaction presets to their cloned counterparts
+    await prisma.character.update({
+      where: { id: cloned.id },
+      data: {
+        dodgePresetId: source.dodgePresetId ? (presetIdMap[source.dodgePresetId] ?? null) : null,
+        blockPresetId: source.blockPresetId ? (presetIdMap[source.blockPresetId] ?? null) : null,
+        counterAttackPresetId: source.counterAttackPresetId ? (presetIdMap[source.counterAttackPresetId] ?? null) : null,
+      },
+    });
+
+    res.status(201).json({ id: cloned.id, name: cloned.name });
+    return;
+  }
+
   // REMOÇÃO
   if (req.method === "DELETE") {
     // Validar se tem combates ativos

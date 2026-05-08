@@ -2,6 +2,12 @@
 import axios, { AxiosHeaders, InternalAxiosRequestConfig } from "axios";
 import { toast } from "react-toastify";
 
+declare module "axios" {
+  interface AxiosRequestConfig {
+    silent?: boolean;
+  }
+}
+
 export function handleLogout(reason?: "expired" | "manual") {
   if (typeof window === "undefined") return;
   localStorage.removeItem("token");
@@ -36,15 +42,18 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response) {
-      const { status, data } = error.response;
-      if (status === 401) {
-        handleLogout("expired");
+    const silent = error.config?.silent === true;
+    if (!silent) {
+      if (error.response) {
+        const { status, data } = error.response;
+        if (status === 401) {
+          handleLogout("expired");
+        } else {
+          toast.error(data?.message || `Erro: ${status}`);
+        }
       } else {
-        toast.error(data?.message || `Erro: ${status}`);
+        toast.error("Sem resposta do servidor.");
       }
-    } else {
-      toast.error("Sem resposta do servidor.");
     }
     return Promise.reject(error);
   }
