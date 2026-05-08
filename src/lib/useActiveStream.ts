@@ -1,23 +1,38 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import api from "./api";
+import { getPusherClient } from "./pusherClient";
 
-export function useActiveStream(pollMs = 20000): string | null {
+export function useActiveStream(): string | null {
     const [streamUrl, setStreamUrl] = useState<string | null>(null);
 
-    useEffect(() => {
-        async function check() {
-            try {
-                const res = await api.get("/stream", { silent: true });
-                setStreamUrl(res.data?.streamUrl ?? null);
-            } catch {
-                // silently ignore — network errors shouldn't break the sheet
-            }
+    const fetchStream = useCallback(async () => {
+        try {
+            const res = await api.get("/stream", { silent: true });
+            setStreamUrl(res.data?.streamUrl ?? null);
+        } catch {
+            // silently ignore
         }
+    }, []);
 
-        check();
-        const id = setInterval(check, pollMs);
+    // Pusher: atualização imediata quando o mestre ativa/remove a stream
+    useEffect(() => {
+        const pusher = getPusherClient();
+        if (!pusher) return;
+
+        const channel = pusher.subscribe("stream");
+        channel.bind("updated", fetchStream);
+
+        return () => {
+            channel.unbind("updated", fetchStream);
+        };
+    }, [fetchStream]);
+
+    // Fallback polling a cada 20s (cobre casos sem Pusher ou reconexão)
+    useEffect(() => {
+        fetchStream();
+        const id = setInterval(fetchStream, 20000);
         return () => clearInterval(id);
-    }, [pollMs]);
+    }, [fetchStream]);
 
     return streamUrl;
 }

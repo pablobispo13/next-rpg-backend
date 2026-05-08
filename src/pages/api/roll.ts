@@ -4,6 +4,7 @@ import { authenticate, AuthenticatedRequest } from "../../lib/auth";
 import { rollDice } from "../../lib/dice";
 import { LogType, EffectType, ActionType } from "@prisma/client";
 import { getAttributeValue } from "../../lib/attributes";
+import { notifyCombatUpdate } from "../../lib/pusher";
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
@@ -453,6 +454,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         });
     }
 
+    if (combatId) notifyCombatUpdate(combatId); // fire-and-forget
     return res.status(201).json({ roll });
 }
 

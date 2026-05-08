@@ -1,6 +1,7 @@
 import type { NextApiResponse } from "next";
 import { authenticate, AuthenticatedRequest } from "../../lib/auth";
 import { prisma } from "../../lib/prisma";
+import { notifyStreamUpdate } from "../../lib/pusher";
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     const user = req.user!;
@@ -30,6 +31,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             where: { id: user.userId },
             data: { streamUrl: streamUrl || null },
         });
+        notifyStreamUpdate();
         return res.status(200).json({ message: "Stream atualizada" });
     }
 

@@ -3,6 +3,7 @@ import { LogType } from "@prisma/client";
 import { authenticate, AuthenticatedRequest } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 import { rollDice } from "../../../lib/dice";
+import { notifyCombatUpdate } from "../../../lib/pusher";
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     if (req.method !== "POST") {
@@ -74,6 +75,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                     rollResults: true,
                 }
             });
+            notifyCombatUpdate(newCombat.id);
             res.status(201).json({ combat: combatFull, order: participantsWithInitiative });
             return;
         }
@@ -174,6 +176,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                     logs: true,
                 }
             });
+            notifyCombatUpdate(combatId);
             res.status(201).json(turnFull);
             return;
         }
@@ -232,6 +235,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 data: { endedAt: new Date() },
             });
 
+            notifyCombatUpdate(combatId);
             res.status(200).json({ message: "Turno finalizado", nextTurnIndex: nextIndex, round: nextRound });
             return;
         }
@@ -262,6 +266,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                     combatId,
                 },
             });
+            notifyCombatUpdate(combatId);
             return res.status(200).json({ currentLife: clampedHp });
         }
 
@@ -279,6 +284,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                     })
                 )
             );
+            notifyCombatUpdate(combatId);
             return res.status(200).json({ message: "Ordem atualizada" });
         }
 
@@ -334,6 +340,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 participants: Object.entries(statsByChar).map(([id, s]) => ({ id, ...s })),
             };
 
+            notifyCombatUpdate(combatId);
             res.status(200).json({ message: "Combate encerrado", stats });
             return;
         }

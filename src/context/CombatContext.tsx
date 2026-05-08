@@ -5,6 +5,7 @@ import { useAuth } from "./AuthContext";
 import api from "../lib/api";
 import { toast } from "react-toastify";
 import { AxiosError } from "axios";
+import { getPusherClient } from "../lib/pusherClient";
 
 function apiErrorMessage(err: unknown, fallback = "Erro desconhecido"): string {
     const axiosErr = err as AxiosError<{ message?: string }>;
@@ -153,7 +154,9 @@ export function CombatProvider({
         });
     }, [combat, user?.id]);
 
-    const REFRESH_INTERVAL = 10000;
+    // Fallback polling interval — longer when Pusher is active
+    const PUSHER_ACTIVE = !!process.env.NEXT_PUBLIC_PUSHER_KEY;
+    const REFRESH_INTERVAL = PUSHER_ACTIVE ? 30000 : 10000;
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
     const countdownRef = useRef<NodeJS.Timeout | null>(null);
     const [nextRefreshIn, setNextRefreshIn] = useState(REFRESH_INTERVAL / 1000);
@@ -168,6 +171,24 @@ export function CombatProvider({
         if (isAutoRefreshPaused) setNextRefreshIn(0);
     }, [isAutoRefreshPaused]);
 
+    // Pusher: subscribe to real-time combat updates
+    useEffect(() => {
+        if (!combatId) return;
+        const pusher = getPusherClient();
+        if (!pusher) return;
+
+        const channel = pusher.subscribe(`combat-${combatId}`);
+        channel.bind("updated", () => {
+            if (!isAutoRefreshPaused) loadCombat(combatId);
+        });
+
+        return () => {
+            channel.unbind_all();
+            pusher.unsubscribe(`combat-${combatId}`);
+        };
+    }, [combatId, isAutoRefreshPaused]);
+
+    // Fallback polling (slower when Pusher is configured)
     useEffect(() => {
         if (!combatId) return;
         if (isAutoRefreshPaused) return;

@@ -222,7 +222,7 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
     }
   }
 
-  const streamUrl = useActiveStream(15000);
+  const streamUrl = useActiveStream();
 
   // Combat notes (master only)
   const [notesValue, setNotesValue] = useState("");
