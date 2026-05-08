@@ -14,7 +14,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
     if (req.method === "GET") {
         const combat = await prisma.combat.findUnique({
-            where: { id: id, active: true },
+            where: { id },
             include: {
                 participants: {
                     include: {

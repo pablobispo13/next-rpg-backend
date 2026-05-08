@@ -67,6 +67,14 @@ enum StatusType {
 enum EffectType {
   HEAL_OVER_TIME
   DAMAGE_OVER_TIME
+  STAT_BUFF
+  STAT_DEBUFF
+  TEMP_HP
+  STUN
+  ROLL_BONUS
+  ROLL_PENALTY
+  ADVANTAGE
+  DISADVANTAGE
 }
 
 ///////////////////////
@@ -164,6 +172,7 @@ model ActionPreset {
   statAffected  AttributeType?
   effectAmount  Int?
   statusApplied StatusType?
+  effectType    EffectType?
 
   characterId String    @db.ObjectId
   character   Character @relation("CharacterPresets", fields: [characterId], references: [id])
@@ -326,6 +335,7 @@ model CombatParticipant {
   character   Character @relation(fields: [characterId], references: [id])
 
   currentLife Int
+  tempHp      Int @default(0)
   initiative  Int?
   turnOrder   Int?
 }

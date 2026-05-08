@@ -48,6 +48,64 @@ import { Reorder, motion, AnimatePresence } from "framer-motion";
 
 type HpTier = { label: string; color: string; bgColor: string };
 
+const EFFECT_META: Record<string, { icon: string; label: string; color: string; bg: string }> = {
+  STAT_BUFF:       { icon: "↑", label: "Buff",        color: "#4ade80", bg: "rgba(74,222,128,0.12)" },
+  STAT_DEBUFF:     { icon: "↓", label: "Debuff",      color: "#f87171", bg: "rgba(248,113,113,0.12)" },
+  ROLL_BONUS:      { icon: "+", label: "Bônus",       color: "#60a5fa", bg: "rgba(96,165,250,0.12)" },
+  ROLL_PENALTY:    { icon: "−", label: "Penalidade",  color: "#f97316", bg: "rgba(249,115,22,0.12)" },
+  STUN:            { icon: "💫", label: "Atordoado",   color: "#fbbf24", bg: "rgba(251,191,36,0.12)" },
+  HEAL_OVER_TIME:  { icon: "♥", label: "Regen",       color: "#34d399", bg: "rgba(52,211,153,0.12)" },
+  DAMAGE_OVER_TIME:{ icon: "☠", label: "DoT",         color: "#ef4444", bg: "rgba(239,68,68,0.12)" },
+};
+
+const ATTR_SHORT: Record<string, string> = {
+  STRENGTH: "FOR", AGILITY: "AGI", VIGOR: "VIG", INTELLECT: "INT", PRESENCE: "PRE",
+};
+
+function HpBar({ current, max, tempHp, height = 7 }: { current: number; max: number; tempHp?: number; height?: number }) {
+  const tier = getHpTier(current, max);
+  const hpPct  = max > 0 ? Math.min(100, (current / max) * 100) : 0;
+  const tmpPct = (max > 0 && (tempHp ?? 0) > 0)
+    ? Math.min(100 - hpPct, ((tempHp ?? 0) / max) * 100)
+    : 0;
+
+  return (
+    <Box sx={{ height, borderRadius: height / 2, bgcolor: "#2a2a3a", position: "relative", overflow: "hidden" }}>
+      <Box sx={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${hpPct}%`, bgcolor: tier.color, transition: "width 0.6s ease" }} />
+      {tmpPct > 0 && (
+        <Box sx={{ position: "absolute", left: `${hpPct}%`, top: 0, bottom: 0, width: `${tmpPct}%`, bgcolor: "#60a5fa", transition: "width 0.6s ease", opacity: 0.85 }} />
+      )}
+    </Box>
+  );
+}
+
+const EFFECT_SHOWS_STAT  = new Set(["STAT_BUFF", "STAT_DEBUFF"]);
+const EFFECT_SHOWS_VALUE = new Set(["STAT_BUFF", "STAT_DEBUFF", "ROLL_BONUS", "ROLL_PENALTY", "HEAL_OVER_TIME", "DAMAGE_OVER_TIME"]);
+
+function EffectChips({ effects, tempHp }: { effects: any[]; tempHp?: number }) {
+  const chips: React.ReactNode[] = [];
+
+  for (const eff of effects ?? []) {
+    const meta = EFFECT_META[eff.type] ?? { icon: "?", label: eff.type, color: "#888", bg: "rgba(136,136,136,0.1)" };
+    const statSuffix  = EFFECT_SHOWS_STAT.has(eff.type) && eff.statAffected ? ` ${ATTR_SHORT[eff.statAffected] ?? eff.statAffected}` : "";
+    const valSuffix   = EFFECT_SHOWS_VALUE.has(eff.type) && eff.value ? ` ${eff.value > 0 ? "+" : ""}${eff.value}` : "";
+    const turnsSuffix = eff.remainingTurns > 1 ? ` (${eff.remainingTurns})` : "";
+    chips.push(
+      <Chip key={eff.id} size="small"
+        label={`${meta.icon}${statSuffix}${valSuffix}${turnsSuffix}`}
+        title={`${meta.label}${statSuffix}${valSuffix} — ${eff.remainingTurns} turno${eff.remainingTurns !== 1 ? "s" : ""} restante${eff.remainingTurns !== 1 ? "s" : ""}`}
+        sx={{ fontSize: 9, height: 16, bgcolor: meta.bg, color: meta.color, border: `1px solid ${meta.color}40` }} />
+    );
+  }
+
+  if (chips.length === 0) return null;
+  return (
+    <Stack direction="row" flexWrap="wrap" gap={0.4} mt={0.5}>
+      {chips}
+    </Stack>
+  );
+}
+
 function getHpTier(currentLife: number, maxLife: number): HpTier {
   if (currentLife <= 0) return { label: "Morto", color: "#666", bgColor: "#66666620" };
   const pct = maxLife > 0 ? currentLife / maxLife : 0;
@@ -493,13 +551,13 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
 
                     <Card
                       onClick={() => {
-                        if (!canAct) return;
+                        if (!canAct || !selectedPresetId) return;
                         const isSelf = p.character.id === activeCharacter.id;
                         if (isSelf && !isHealPreset) return;
                         selectTarget(p.character.id, isAoe);
                       }}
                       sx={{
-                        cursor: canAct && (p.character.id !== activeCharacter.id || isHealPreset) ? "pointer" : isMaster ? "grab" : "default",
+                        cursor: canAct && selectedPresetId && (p.character.id !== activeCharacter.id || isHealPreset) ? "pointer" : isMaster ? "grab" : "default",
                         backgroundColor: isTarget
                           ? (isHealPreset ? "rgba(74,222,128,0.15)" : "rgba(239,83,80,0.15)")
                           : (isHealPreset && p.character.id === activeCharacter.id && canAct ? "rgba(74,222,128,0.05)" : isActive ? "rgba(42,42,85,0.8)" : "rgba(28,28,46,0.6)"),
@@ -538,14 +596,25 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
                         {/* HP */}
                         {showExactHp ? (
                           <>
-                            <LinearProgress value={hpPct} variant="determinate" sx={{ height: 7, borderRadius: 4, bgcolor: "#333", "& .MuiLinearProgress-bar": { bgcolor: tier.color, transition: "width 0.6s ease" } }} />
-                            <Typography fontSize={11} color="#aaa" mt={0.5}>{p.currentLife} / {p.character.maxLife} HP</Typography>
+                            <HpBar current={p.currentLife} max={p.character.maxLife} tempHp={p.tempHp ?? 0} />
+                            <Stack direction="row" alignItems="center" spacing={0.75} mt={0.5}>
+                              <Typography fontSize={11} color="#aaa">{p.currentLife} / {p.character.maxLife} HP</Typography>
+                              {(p.tempHp ?? 0) > 0 && (
+                                <Box sx={{ display: "flex", alignItems: "center", gap: 0.4, px: 0.75, py: 0.1, borderRadius: 1, bgcolor: "rgba(96,165,250,0.15)", border: "1px solid rgba(96,165,250,0.4)" }}>
+                                  <Typography fontSize={10} lineHeight={1}>🛡</Typography>
+                                  <Typography fontSize={11} color="#60a5fa" fontWeight={700} lineHeight={1}>{p.tempHp}</Typography>
+                                </Box>
+                              )}
+                            </Stack>
                           </>
                         ) : (
                           <Box mt={0.75} sx={{ px: 1.5, py: 0.4, borderRadius: 1, bgcolor: tier.bgColor, border: `1px solid ${tier.color}40`, display: "inline-block" }}>
                             <Typography fontSize={11} color={tier.color} fontWeight={600}>{tier.label}</Typography>
                           </Box>
                         )}
+
+                        {/* Active effects */}
+                        <EffectChips effects={p.character.statusEffects} />
                       </CardContent>
                     </Card>
                   </Reorder.Item>
@@ -927,9 +996,17 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
 
                         {showExactHp ? (
                           <>
-                            <LinearProgress value={hpPct} variant="determinate" sx={{ height: 10, borderRadius: 5, bgcolor: "#333", mb: 0.5, "& .MuiLinearProgress-bar": { bgcolor: tier.color } }} />
-                            <Stack direction="row" justifyContent="space-between">
-                              <Typography fontSize={12} color="#aaa">{p.currentLife} / {p.character.maxLife} HP</Typography>
+                            <HpBar current={p.currentLife} max={p.character.maxLife} tempHp={p.tempHp ?? 0} height={10} />
+                            <Stack direction="row" justifyContent="space-between" alignItems="center" mt={0.5}>
+                              <Stack direction="row" alignItems="center" spacing={0.75}>
+                                <Typography fontSize={12} color="#aaa">{p.currentLife} / {p.character.maxLife} HP</Typography>
+                                {(p.tempHp ?? 0) > 0 && (
+                                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, px: 1, py: 0.2, borderRadius: 1, bgcolor: "rgba(96,165,250,0.15)", border: "1px solid rgba(96,165,250,0.4)" }}>
+                                    <Typography fontSize={11} lineHeight={1}>🛡</Typography>
+                                    <Typography fontSize={12} color="#60a5fa" fontWeight={700} lineHeight={1}>{p.tempHp}</Typography>
+                                  </Box>
+                                )}
+                              </Stack>
                               <Typography fontSize={12} color={tier.color} fontWeight={600}>{tier.label}</Typography>
                             </Stack>
                           </>

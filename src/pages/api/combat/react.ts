@@ -82,10 +82,31 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
     async function applyDamageToTarget(amount: number) {
         if (targetParticipant) {
-            const newLife = Math.max(0, targetParticipant.currentLife - amount);
+            const currentTempHp = targetParticipant.tempHp ?? 0;
+            let remainingDamage = amount;
+            let newTempHp = currentTempHp;
+
+            if (currentTempHp > 0) {
+                const absorbed = Math.min(currentTempHp, remainingDamage);
+                remainingDamage -= absorbed;
+                newTempHp = currentTempHp - absorbed;
+                if (absorbed > 0 && attackRoll?.combatId) {
+                    await prisma.actionLog.create({
+                        data: {
+                            type: LogType.MANUAL_OVERRIDE,
+                            message: `${target!.name} absorveu ${absorbed} de dano com HP temporário`,
+                            characterId: target!.id,
+                            combatId: attackRoll.combatId,
+                            turnId: turnId ?? null,
+                        },
+                    });
+                }
+            }
+
+            const newLife = Math.max(0, targetParticipant.currentLife - remainingDamage);
             await prisma.combatParticipant.update({
                 where: { id: targetParticipant.id },
-                data: { currentLife: newLife },
+                data: { currentLife: newLife, tempHp: newTempHp },
             });
         } else {
             await prisma.character.update({

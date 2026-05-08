@@ -11,6 +11,7 @@ import {
   Divider,
   Box,
   Typography,
+  Avatar,
 } from "@mui/material";
 import { useEffect, useState } from "react";
 import api from "../../lib/api";
@@ -26,21 +27,33 @@ type Props = {
   onClose: () => void;
 };
 
+const BLANK = {
+  name: "",
+  life: 0,
+  maxLife: 0,
+  xp: 0,
+  baseDefense: 0,
+  history: "",
+  notes: "",
+  image: "",
+  strength: 0,
+  agility: 0,
+  vigor: 0,
+  intellect: 0,
+  presence: 0,
+};
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <Typography variant="caption" fontWeight="bold" color="text.secondary">
+      {children}
+    </Typography>
+  );
+}
+
 export function CharacterStatsModal({ open, character, onClose }: Props) {
-  const [form, setForm] = useState({
-    name: "",
-    life: 0,
-    maxLife: 0,
-    xp: 0,
-    baseDefense: 0,
-    history: "",
-    notes: "",
-    strength: 0,
-    agility: 0,
-    vigor: 0,
-    intellect: 0,
-    presence: 0,
-  });
+  const [form, setForm] = useState(BLANK);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (character && open) {
@@ -52,6 +65,7 @@ export function CharacterStatsModal({ open, character, onClose }: Props) {
         baseDefense: character.baseDefense ?? 0,
         history: character.history ?? "",
         notes: character.notes ?? "",
+        image: character.image ?? "",
         strength: character.strength,
         agility: character.agility,
         vigor: character.vigor,
@@ -64,89 +78,93 @@ export function CharacterStatsModal({ open, character, onClose }: Props) {
   const update = (key: string, value: number | string | boolean) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
+  const handleClose = () => {
+    setForm(BLANK);
+    onClose();
+  };
+
   const autoCalculateMaxLife = () => {
-    const newMaxLife = calculateMaxLife(
-      Number(form.strength),
-      Number(form.vigor),
-    );
-    update("maxLife", newMaxLife);
+    update("maxLife", calculateMaxLife(Number(form.strength), Number(form.vigor)));
   };
 
   const autoCalculateDefense = () => {
-    const newDefense = calculateDefense(
-      Number(form.agility),
-      Number(form.vigor),
-    );
-    update("baseDefense", newDefense);
+    update("baseDefense", calculateDefense(Number(form.agility), Number(form.vigor)));
   };
 
   const handleSave = async () => {
-    if (form.life > form.maxLife) {
+    if (Number(form.life) > Number(form.maxLife)) {
       alert("A vida atual não pode ser maior que a vida máxima.");
       return;
     }
-
-    await api.put(`/characters/${character?.id}`, {
-      ...form,
-      life: Number(form.life),
-      maxLife: Number(form.maxLife),
-      xp: Number(form.xp),
-      baseDefense: Number(form.baseDefense),
-      history: String(form.history),
-      notes: String(form.notes),
-      strength: Number(form.strength),
-      agility: Number(form.agility),
-      vigor: Number(form.vigor),
-      intellect: Number(form.intellect),
-      presence: Number(form.presence),
-    });
-
-    onClose();
+    setSaving(true);
+    try {
+      await api.put(`/characters/${character?.id}`, {
+        name: form.name,
+        life: Number(form.life),
+        maxLife: Number(form.maxLife),
+        xp: Number(form.xp),
+        baseDefense: Number(form.baseDefense),
+        history: String(form.history),
+        notes: String(form.notes),
+        image: form.image || null,
+        strength: Number(form.strength),
+        agility: Number(form.agility),
+        vigor: Number(form.vigor),
+        intellect: Number(form.intellect),
+        presence: Number(form.presence),
+      });
+      handleClose();
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <Dialog
       open={open}
-      onClose={(event, reason) => {
-        if (reason !== "backdropClick") {
-          setForm({
-            name: "",
-            life: 0,
-            maxLife: 0,
-            xp: 0,
-            baseDefense: 0,
-            history: "",
-            notes: "",
-            strength: 0,
-            agility: 0,
-            vigor: 0,
-            intellect: 0,
-            presence: 0,
-          });
-          onClose();
-        }
-      }}
+      onClose={(_, reason) => { if (reason !== "backdropClick") handleClose(); }}
       maxWidth="sm"
       fullWidth
+      PaperProps={{ sx: { bgcolor: "#12121e" } }}
     >
       <DialogTitle>Editar Dados do Personagem</DialogTitle>
 
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
-          <TextField
-            label="Nome"
-            value={form.name}
-            onChange={(e) => update("name", e.target.value)}
-            fullWidth
-          />
+
+          {/* Identificação */}
+          <SectionLabel>Identificação</SectionLabel>
+          <Stack direction="row" spacing={2} alignItems="flex-start">
+            <Avatar
+              src={form.image || undefined}
+              sx={{ width: 64, height: 64, mt: 1, flexShrink: 0 }}
+            >
+              {form.name?.[0]?.toUpperCase()}
+            </Avatar>
+            <Stack spacing={2} flex={1}>
+              <TextField
+                label="Nome"
+                value={form.name}
+                onChange={(e) => update("name", e.target.value)}
+                fullWidth
+              />
+              <TextField
+                label="URL da Imagem"
+                value={form.image}
+                onChange={(e) => update("image", e.target.value)}
+                fullWidth
+                placeholder="https://..."
+                helperText="Link de imagem para o avatar do personagem"
+              />
+            </Stack>
+          </Stack>
 
           <Divider />
 
+          {/* Vida */}
           <Box>
             <Stack direction="row" spacing={1} alignItems="center" mb={1}>
-              <Typography variant="caption" fontWeight="bold">
-                Vida
-              </Typography>
+              <SectionLabel>Vida</SectionLabel>
               <Button
                 size="small"
                 variant="outlined"
@@ -173,13 +191,13 @@ export function CharacterStatsModal({ open, character, onClose }: Props) {
               />
             </Stack>
           </Box>
+
           <Divider />
 
+          {/* Defesa e XP */}
           <Box>
             <Stack direction="row" spacing={1} alignItems="center" mb={1}>
-              <Typography variant="caption" fontWeight="bold">
-                Defesa
-              </Typography>
+              <SectionLabel>Defesa</SectionLabel>
               <Button
                 size="small"
                 variant="outlined"
@@ -189,17 +207,29 @@ export function CharacterStatsModal({ open, character, onClose }: Props) {
                 Auto: 3 + (Agi + Vig)
               </Button>
             </Stack>
-            <TextField
-              label="Defesa Base"
-              type="number"
-              value={form.baseDefense}
-              onChange={(e) => update("baseDefense", e.target.value)}
-              fullWidth
-            />
+            <Stack direction="row" spacing={2}>
+              <TextField
+                label="Defesa Base"
+                type="number"
+                value={form.baseDefense}
+                onChange={(e) => update("baseDefense", e.target.value)}
+                fullWidth
+              />
+              <TextField
+                label="XP"
+                type="number"
+                value={form.xp}
+                onChange={(e) => update("xp", e.target.value)}
+                fullWidth
+                inputProps={{ min: 0 }}
+              />
+            </Stack>
           </Box>
 
           <Divider />
 
+          {/* Atributos */}
+          <SectionLabel>Atributos</SectionLabel>
           <Stack direction="row" spacing={2}>
             <TextField
               label="Força"
@@ -213,15 +243,14 @@ export function CharacterStatsModal({ open, character, onClose }: Props) {
               value={form.agility}
               onChange={(e) => update("agility", e.target.value)}
             />
-          </Stack>
-
-          <Stack direction="row" spacing={2}>
             <TextField
               label="Vigor"
               type="number"
               value={form.vigor}
               onChange={(e) => update("vigor", e.target.value)}
             />
+          </Stack>
+          <Stack direction="row" spacing={2}>
             <TextField
               label="Intelecto"
               type="number"
@@ -235,9 +264,14 @@ export function CharacterStatsModal({ open, character, onClose }: Props) {
               onChange={(e) => update("presence", e.target.value)}
             />
           </Stack>
+
+          <Divider />
+
+          {/* Texto */}
+          <SectionLabel>Texto livre</SectionLabel>
           <TextField
             multiline
-            rows={12}
+            rows={8}
             label="História"
             value={form.history}
             onChange={(e) => update("history", e.target.value)}
@@ -245,7 +279,7 @@ export function CharacterStatsModal({ open, character, onClose }: Props) {
           />
           <TextField
             multiline
-            rows={12}
+            rows={6}
             label="Anotações"
             value={form.notes}
             onChange={(e) => update("notes", e.target.value)}
@@ -255,30 +289,15 @@ export function CharacterStatsModal({ open, character, onClose }: Props) {
       </DialogContent>
 
       <DialogActions>
-        <Button
-          onClick={() => {
-            setForm({
-              name: "",
-              life: 0,
-              maxLife: 0,
-              xp: 0,
-              baseDefense: 0,
-              history: "",
-              notes: "",
-              strength: 0,
-              agility: 0,
-              vigor: 0,
-              intellect: 0,
-              presence: 0,
-            });
-            onClose();
-          }}
-          color="inherit"
-        >
+        <Button onClick={handleClose} color="inherit" disabled={saving}>
           Cancelar
         </Button>
-        <Button variant="contained" onClick={handleSave}>
-          Salvar
+        <Button
+          variant="contained"
+          onClick={handleSave}
+          disabled={!form.name.trim() || saving}
+        >
+          {saving ? "Salvando…" : "Salvar"}
         </Button>
       </DialogActions>
     </Dialog>

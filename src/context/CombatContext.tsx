@@ -71,7 +71,6 @@ export function CombatProvider({
         setCombatStats(null);
     }
 
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
     const activeTurnIdRef = useRef<string | null>(null);
 
     function extractPendingReaction(combatData: any, userId?: string) {
@@ -187,11 +186,12 @@ export function CombatProvider({
                 activeTurnIdRef.current = null;
             }
         } catch (err: any) {
+            // 404 = combate não existe mais (deletado) — redireciona
             if (err?.response?.status === 404) {
-                // Combat was ended — mark inactive so players are redirected
                 setCombat((prev: any) => (prev ? { ...prev, active: false } : { active: false }));
+            } else {
+                console.error("Erro ao carregar combate", err);
             }
-            console.error("Erro ao carregar combate", err);
         }
     }
 
@@ -301,12 +301,28 @@ export function CombatProvider({
         }
     }
 
+    // Abre o próximo turno, pulando automaticamente personagens atordoados
+    async function openNextTurn(combatIdParam: string) {
+        let skipped = true;
+        let guard = 0;
+        while (skipped && guard < 20) {
+            try {
+                const response = await api.post("/combat/control", { action: "startTurn", combatId: combatIdParam });
+                skipped = response.data?.skipped === true;
+            } catch {
+                // Turno já existente (idempotência) — não é erro
+                skipped = false;
+            }
+            guard++;
+        }
+    }
+
     async function startTurn(combatIdParam?: string) {
         const id = combatIdParam || combat?.id;
         if (!id) return;
         try {
             setIsLoading(true);
-            await api.post("/combat/control", { action: "startTurn", combatId: id });
+            await openNextTurn(id);
             setSelectedTargets([]);
             await loadCombat(id);
         } catch (err) {
@@ -339,13 +355,7 @@ export function CombatProvider({
             setSelectedTargets([]);
             activeTurnIdRef.current = null;
 
-            // Auto-start the next turn so the new turnId is available immediately
-            try {
-                await api.post("/combat/control", { action: "startTurn", combatId: combat.id });
-            } catch {
-                // startTurn may fail if the turn already exists (idempotency) — ignore
-            }
-
+            await openNextTurn(combat.id);
             await loadCombat();
         } catch (err) {
             toast.error(apiErrorMessage(err, "Erro ao finalizar turno"));

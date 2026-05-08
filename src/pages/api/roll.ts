@@ -169,23 +169,27 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
     const baseAttribute = getAttributeValue(character, preset.attribute);
 
-    const activeEffects = await prisma.characterEffect.findMany({
-        where: {
-            characterId: character.id,
-            remainingTurns: { gt: 0 },
-            statAffected: preset.attribute,
-        },
+    // Load all active caster effects
+    const allCasterEffects = await prisma.characterEffect.findMany({
+        where: { characterId: character.id, remainingTurns: { gt: 0 } },
     });
 
-    const effectBonus = activeEffects.reduce((sum, e) => sum + e.value, 0);
+    // Stat effects: bonus/penalty to the specific attribute used in this action
+    const statEffects = allCasterEffects.filter(e => e.statAffected === preset.attribute);
+    const effectBonus = statEffects.reduce((sum, e) =>
+        sum + (e.type === "STAT_DEBUFF" ? -Math.abs(e.value) : e.value), 0
+    );
     const effectiveAttribute = baseAttribute + effectBonus;
 
+    // Roll effects: flat bonus/penalty applied directly to the d20 result
+    const rollModifier = allCasterEffects
+        .filter(e => e.type === "ROLL_BONUS" || e.type === "ROLL_PENALTY")
+        .reduce((sum, e) => sum + (e.type === "ROLL_PENALTY" ? -Math.abs(e.value) : e.value), 0);
 
     const attackRoll = rollDice(preset.diceFormula);
-    const flatModifier = preset.modifier ?? 0;
 
-    const attackTotal =
-        attackRoll.total + effectiveAttribute + flatModifier;
+    const flatModifier = preset.modifier ?? 0;
+    const attackTotal = attackRoll.total + effectiveAttribute + flatModifier + rollModifier;
 
     const isCritical = attackRoll.rolls.some(
         r => r >= (preset.critThreshold ?? 999)
@@ -307,10 +311,31 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             if (combatParticipant) {
                 // Em combate: atualiza HP do participante
                 if (preset.type === ActionType.ATTACK && !shouldOpenReaction) {
-                    afterLife = Math.max(0, beforeLife - impactTotal);
+                    const currentTempHp = combatParticipant.tempHp ?? 0;
+                    let remainingDamage = impactTotal;
+                    let newTempHp = currentTempHp;
+
+                    if (currentTempHp > 0) {
+                        const absorbed = Math.min(currentTempHp, remainingDamage);
+                        remainingDamage -= absorbed;
+                        newTempHp = currentTempHp - absorbed;
+                        await prisma.actionLog.create({
+                            data: {
+                                type: LogType.MANUAL_OVERRIDE,
+                                message: `${target.name} absorveu ${absorbed} de dano com HP temporário`,
+                                characterId: character.id,
+                                targetId,
+                                rollId: roll.id,
+                                combatId: combatId ?? null,
+                                turnId: turnId ?? null,
+                            },
+                        });
+                    }
+
+                    afterLife = Math.max(0, beforeLife - remainingDamage);
                     await prisma.combatParticipant.update({
                         where: { id: combatParticipant.id },
-                        data: { currentLife: afterLife },
+                        data: { currentLife: afterLife, tempHp: newTempHp },
                     });
                 } else if (isHealType) {
                     afterLife = Math.min(target.maxLife, beforeLife + impactTotal);
@@ -380,37 +405,59 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             else if (isHealType) directHealNames.push(target.name);
         }
 
-        if (
-            preset.appliesEffect &&
-            preset.durationTurns &&
-            preset.effectAmount
-        ) {
+        if (preset.appliesEffect) {
+            const effectType: EffectType = preset.effectType ?? (
+                preset.type === ActionType.ATTACK ? EffectType.DAMAGE_OVER_TIME : EffectType.HEAL_OVER_TIME
+            );
 
-            await prisma.characterEffect.create({
-                data: {
-                    characterId: target.id,
-                    presetId: preset.id,
-                    remainingTurns: preset.durationTurns,
-                    type:
-                        preset.type === ActionType.ATTACK
-                            ? EffectType.DAMAGE_OVER_TIME
-                            : EffectType.HEAL_OVER_TIME,
-                    statAffected: preset.statAffected,
-                    value: preset.effectAmount,
-                },
-            });
-
-            await prisma.actionLog.create({
-                data: {
-                    type: LogType.MANUAL_OVERRIDE,
-                    message: `${target.name} recebeu efeito ${preset.name} por ${preset.durationTurns} turnos`,
-                    characterId: character.id,
-                    targetId,
-                    rollId: roll.id,
-                    combatId: combatId ?? null,
-                    turnId: turnId ?? null,
-                },
-            });
+            if (effectType === EffectType.TEMP_HP) {
+                // Immediate: add to participant's temp HP pool
+                const amount = preset.effectAmount ?? 0;
+                if (amount > 0 && combatParticipant) {
+                    const currentTempHp = combatParticipant.tempHp ?? 0;
+                    await prisma.combatParticipant.update({
+                        where: { id: combatParticipant.id },
+                        data: { tempHp: currentTempHp + amount },
+                    });
+                    await prisma.actionLog.create({
+                        data: {
+                            type: LogType.MANUAL_OVERRIDE,
+                            message: `${target.name} ganhou ${amount} de HP temporário por ${preset.name}`,
+                            characterId: character.id,
+                            targetId,
+                            rollId: roll.id,
+                            combatId: combatId ?? null,
+                            turnId: turnId ?? null,
+                        },
+                    });
+                }
+            } else if (preset.durationTurns && preset.durationTurns > 0) {
+                // Timed effect: create CharacterEffect record
+                const effectNeedsStat  = effectType === "STAT_BUFF" || effectType === "STAT_DEBUFF";
+                const effectNeedsValue = ["STAT_BUFF", "STAT_DEBUFF", "ROLL_BONUS", "ROLL_PENALTY",
+                                          "HEAL_OVER_TIME", "DAMAGE_OVER_TIME"].includes(effectType);
+                await prisma.characterEffect.create({
+                    data: {
+                        characterId: target.id,
+                        presetId: preset.id,
+                        remainingTurns: preset.durationTurns,
+                        type: effectType,
+                        statAffected: effectNeedsStat ? (preset.statAffected ?? null) : null,
+                        value: effectNeedsValue ? (preset.effectAmount ?? 0) : 0,
+                    },
+                });
+                await prisma.actionLog.create({
+                    data: {
+                        type: LogType.MANUAL_OVERRIDE,
+                        message: `${target.name} recebeu efeito ${preset.name} por ${preset.durationTurns} turnos`,
+                        characterId: character.id,
+                        targetId,
+                        rollId: roll.id,
+                        combatId: combatId ?? null,
+                        turnId: turnId ?? null,
+                    },
+                });
+            }
         }
     }
 
