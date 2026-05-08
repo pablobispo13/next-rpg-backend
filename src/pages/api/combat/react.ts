@@ -62,7 +62,12 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         })
         : null;
 
-    const damage = attackRoll.damage ?? 0;
+    // Busca o dano específico deste alvo — em ataques multi-alvo cada alvo
+    // tem seu próprio damageApplied em RollResultDetail
+    const targetDetail = await prisma.rollResultDetail.findFirst({
+        where: { rollResultId: attackRoll.id, targetId },
+    });
+    const damage = targetDetail?.damageApplied ?? attackRoll.damage ?? 0;
 
     async function applyDamageToTarget(amount: number) {
         if (targetParticipant) {

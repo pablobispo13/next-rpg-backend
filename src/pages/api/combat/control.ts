@@ -3,7 +3,7 @@ import { LogType } from "@prisma/client";
 import { authenticate, AuthenticatedRequest } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 import { rollDice } from "../../../lib/dice";
-import { notifyCombatUpdate } from "../../../lib/pusher";
+import { notifyCombatUpdate, notifyCombatListUpdate } from "../../../lib/pusher";
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     if (req.method !== "POST") {
@@ -76,6 +76,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 }
             });
             notifyCombatUpdate(newCombat.id);
+            notifyCombatListUpdate();
             res.status(201).json({ combat: combatFull, order: participantsWithInitiative });
             return;
         }
@@ -341,6 +342,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             };
 
             notifyCombatUpdate(combatId);
+            notifyCombatListUpdate();
             res.status(200).json({ message: "Combate encerrado", stats });
             return;
         }

@@ -22,6 +22,18 @@ export function getPusher(): Pusher | null {
     return _pusher;
 }
 
+export async function notifyCombatListUpdate(): Promise<void> {
+    const pusher = getPusher();
+    if (!pusher) return;
+    try {
+        await pusher.trigger("combats", "updated", {});
+    } catch (err) {
+        if (process.env.NODE_ENV === "development") {
+            console.error("[Pusher] Falha ao notificar lista de combates:", err);
+        }
+    }
+}
+
 export async function notifyStreamUpdate(): Promise<void> {
     const pusher = getPusher();
     if (!pusher) return;
