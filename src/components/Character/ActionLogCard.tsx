@@ -1,9 +1,8 @@
-"use client";
-
 import { Stack, Card, CardContent, Typography, Box } from "@mui/material";
 import { ActionLog } from "../../types/types";
 import HistoryIcon from "@mui/icons-material/History";
 import { useState } from "react";
+import { RollBreakdown } from "../Log/RollBreakdown";
 
 type Props = {
   actionLog: ActionLog;
@@ -21,6 +20,28 @@ export function ActionLogCard({ actionLog }: Props) {
 
   if (!isRoll) return null;
 
+  // Calcula damageModifier e extrai impactRolls
+  let damageRolls: number[] | undefined;
+  let damageModifier = 0;
+
+  if (actionLog.roll?.damage && actionLog.roll?.preset?.impactFormula) {
+    // Se temos impactRolls (novo campo), usa diretamente
+    const impactRollsData = (actionLog.roll as any).impactRolls;
+    if (impactRollsData && impactRollsData.length > 0) {
+      damageRolls = impactRollsData;
+      // Calcula modificador: diferença entre damage total e soma dos dados brutos
+      const impactDiceSum = impactRollsData.reduce((a: number, b: number) => a + b, 0);
+      damageModifier = Math.max(0, actionLog.roll.damage - impactDiceSum);
+    } else {
+      // Fallback: estima baseado no modifier do ataque
+      if (actionLog.roll.rolls && actionLog.roll.rolls.length > 0) {
+        const attackDiceSum = actionLog.roll.rolls.reduce((a, b) => a + b, 0);
+        const attackModifierOnly = actionLog.roll.modifier - attackDiceSum;
+        damageModifier = Math.max(0, attackModifierOnly);
+      }
+    }
+  }
+
   return (
     <Card
       onMouseEnter={() => setHovering(true)}
@@ -34,7 +55,7 @@ export function ActionLogCard({ actionLog }: Props) {
       }}
     >
       <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
-        <Stack direction="row" alignItems="center" spacing={1.5} mb={1}>
+        <Stack direction="row" alignItems="flex-start" spacing={1.5} mb={1.5}>
           <Box
             sx={{
               fontSize: "1.5rem",
@@ -46,6 +67,7 @@ export function ActionLogCard({ actionLog }: Props) {
               backgroundColor: `${color}20`,
               borderRadius: 1,
               border: `1px solid ${color}40`,
+              flexShrink: 0,
             }}
           >
             <HistoryIcon fontSize="small" />
@@ -55,17 +77,23 @@ export function ActionLogCard({ actionLog }: Props) {
             <Typography fontWeight="bold" variant="subtitle2">
               {actionLog.message}
             </Typography>
-            {actionLog.roll && (
-              <Typography variant="caption" color="text.secondary" sx={{ fontFamily: "monospace" }}>
-                {actionLog.roll.preset?.diceFormula}
-                {actionLog.roll.preset?.modifier ? ` + ${actionLog.roll.preset.modifier}` : ""}
-                {" = "}
-                <span style={{ color }}>{actionLog.roll.total}</span>
-              </Typography>
-            )}
           </Stack>
         </Stack>
 
+        {/* RollBreakdown se houver roll */}
+        {actionLog.roll && (
+          <Box sx={{ backgroundColor: "#1a1a2e20", p: 1.5, borderRadius: 1.5, mt: 1.5 }}>
+            <RollBreakdown
+              roll={actionLog.roll}
+              succeeded={actionLog.roll.sucess ?? undefined}
+              showDamage={!!actionLog.roll.damage}
+              damageRolls={damageRolls}
+              damageModifier={damageModifier}
+            />
+          </Box>
+        )}
+
+        {/* Habilidade info */}
         {actionLog.roll?.preset && (
           <Stack spacing={1} sx={{ mt: 1.5 }}>
             <Box>

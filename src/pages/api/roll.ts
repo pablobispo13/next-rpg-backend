@@ -213,8 +213,35 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 attackTotal >= (target.baseDefense ?? 0);
         }
 
+        // Busca CombatParticipant para aplicar dano/cura
+        let combatParticipant = null;
+        let beforeLife = target.life;
+
+        if (combatId) {
+            combatParticipant = await prisma.combatParticipant.findFirst({
+                where: {
+                    combatId,
+                    characterId: targetId,
+                },
+            });
+
+            if (combatParticipant) {
+                beforeLife = combatParticipant.currentLife;
+            }
+        }
 
         if (!passedBaseDefense) {
+
+            await prisma.rollResultDetail.create({
+                data: {
+                    rollResultId: roll.id,
+                    targetId,
+                    beforeLife,
+                    succeeded: false,
+                    critical: false,
+                    targetDefense: target.baseDefense ?? 0,
+                },
+            });
 
             await prisma.rollResult.update({
                 where: { id: roll.id },
@@ -236,7 +263,6 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             continue;
         }
 
-
         const shouldOpenReaction =
             preset.type === ActionType.ATTACK &&
             !!(
@@ -245,12 +271,13 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 target.counterAttackPresetId
             );
 
-
         let impactTotal: number | null = null;
+        let impactRolls: number[] = [];
 
         if (preset.impactFormula) {
 
             const impactRoll = rollDice(preset.impactFormula);
+            impactRolls = impactRoll.rolls;
 
             impactTotal = impactRoll.total + effectiveAttribute;
 
@@ -261,12 +288,47 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             }
         }
 
+        // Aplica dano/cura automático em combate
+        let afterLife = beforeLife;
+
+        if (combatParticipant && impactTotal) {
+            if (preset.type === ActionType.ATTACK) {
+                afterLife = Math.max(0, beforeLife - impactTotal);
+                await prisma.combatParticipant.update({
+                    where: { id: combatParticipant.id },
+                    data: { currentLife: afterLife },
+                });
+            } else if (preset.type === ActionType.HEAL) {
+                afterLife = Math.min(target.maxLife, beforeLife + impactTotal);
+                await prisma.combatParticipant.update({
+                    where: { id: combatParticipant.id },
+                    data: { currentLife: afterLife },
+                });
+            }
+        }
+
+        // Cria RollResultDetail para sucesso
+        await prisma.rollResultDetail.create({
+            data: {
+                rollResultId: roll.id,
+                targetId,
+                beforeLife,
+                succeeded: true,
+                critical: isCritical,
+                damageApplied:
+                    preset.type === ActionType.ATTACK ? impactTotal : null,
+                healingApplied:
+                    preset.type === ActionType.HEAL ? impactTotal : null,
+                targetDefense: target.baseDefense ?? 0,
+            },
+        });
 
         await prisma.rollResult.update({
             where: { id: roll.id },
             data: {
                 success: true,
                 pendingReaction: shouldOpenReaction,
+                impactRolls: impactRolls.length > 0 ? impactRolls : undefined,
                 damage:
                     preset.type === ActionType.ATTACK
                         ? impactTotal
@@ -277,7 +339,6 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                         : null,
             },
         });
-
 
         await prisma.actionLog.create({
             data: {
@@ -293,6 +354,30 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             },
         });
 
+        // Cria ActionLog de DAMAGE/HEAL se houver impacto
+        if (impactTotal && impactTotal > 0) {
+            const damageLogType =
+                preset.type === ActionType.ATTACK
+                    ? LogType.DAMAGE
+                    : LogType.HEAL;
+
+            const damageMessage =
+                preset.type === ActionType.ATTACK
+                    ? `${target.name} recebeu ${impactTotal} de dano`
+                    : `${target.name} foi curado em ${impactTotal}`;
+
+            await prisma.actionLog.create({
+                data: {
+                    type: damageLogType,
+                    message: damageMessage,
+                    characterId: character.id,
+                    targetId,
+                    rollId: roll.id,
+                    combatId: combatId ?? null,
+                    turnId: turnId ?? null,
+                },
+            });
+        }
 
         if (
             preset.appliesEffect &&

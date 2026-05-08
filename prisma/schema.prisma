@@ -201,6 +201,8 @@ model RollResult {
   modifier   Int
   total      Int
 
+  impactRolls Int[] @default([]) // Rolls do dano/cura (ex: [3, 2, 1])
+
   success  Boolean? // Será definido após reação do alvo
   critical Boolean
 
@@ -214,7 +216,33 @@ model RollResult {
 
   createdAt DateTime @default(now())
 
-  logs ActionLog[] @relation("RollLogs")
+  logs    ActionLog[]      @relation("RollLogs")
+  details RollResultDetail[] @relation("RollDetails")
+}
+
+///////////////////////
+// ROLL RESULT DETAIL
+///////////////////////
+
+model RollResultDetail {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  rollResultId String    @db.ObjectId
+  rollResult   RollResult @relation("RollDetails", fields: [rollResultId], references: [id])
+
+  targetId String @db.ObjectId
+
+  // Antes da ação
+  beforeLife Int?
+
+  // Resultado
+  succeeded Boolean
+  critical  Boolean
+  damageApplied Int?
+  healingApplied Int?
+
+  // Defesa (para breakdown visual)
+  targetDefense Int?
 }
 
 ///////////////////////
