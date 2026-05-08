@@ -42,7 +42,7 @@ export default function Layout({ children }: LayoutProps) {
                   textTransform: "uppercase",
                 }}
               >
-                Mesa RPG
+                Quarentena RPG
               </Typography>
             </Box>
 

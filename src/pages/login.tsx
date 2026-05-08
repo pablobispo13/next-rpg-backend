@@ -149,7 +149,7 @@ export default function LoginPage() {
               fontFamily: "'Rubik', sans-serif",
             }}
           >
-            Mesa RPG
+            Quarentena RPG
           </Typography>
           <Typography
             variant="caption"
