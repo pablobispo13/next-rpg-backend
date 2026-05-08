@@ -32,11 +32,8 @@ export function useActiveCombats() {
         };
     }, [loadCombats]);
 
-    // Carga inicial + polling de fallback a cada 30s
     useEffect(() => {
         loadCombats();
-        const id = setInterval(loadCombats, 30000);
-        return () => clearInterval(id);
     }, [loadCombats]);
 
     return { combats, loading, reload: loadCombats };

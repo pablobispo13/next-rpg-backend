@@ -27,11 +27,8 @@ export function useActiveStream(): string | null {
         };
     }, [fetchStream]);
 
-    // Fallback polling a cada 20s (cobre casos sem Pusher ou reconexão)
     useEffect(() => {
         fetchStream();
-        const id = setInterval(fetchStream, 20000);
-        return () => clearInterval(id);
     }, [fetchStream]);
 
     return streamUrl;

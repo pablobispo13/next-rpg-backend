@@ -44,10 +44,6 @@ export type CombatContextType = {
         reactionType: "DODGE" | "COUNTER_ATTACK" | "BLOCK" | "SKIP"
     ) => Promise<void>;
     refreshCombat: () => Promise<void>;
-    nextRefreshIn: number;
-    pauseAutoRefresh: () => void;
-    resumeAutoRefresh: () => void;
-    isAutoRefreshPaused: boolean;
 };
 
 const CombatContext = createContext<CombatContextType>({} as any);
@@ -68,7 +64,6 @@ export function CombatProvider({
     const [myCharacterIds, setMyCharacterIds] = useState<string[]>([]);
     const [selectedTargets, setSelectedTargets] = useState<string[]>([]);
     const [pendingReactionRoll, setPendingReactionRoll] = useState<any | null>(null);
-    const [isAutoRefreshPaused, setIsAutoRefreshPaused] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [combatStats, setCombatStats] = useState<CombatStats | null>(null);
 
@@ -76,15 +71,6 @@ export function CombatProvider({
         setCombatStats(null);
     }
 
-    function pauseAutoRefresh() {
-        setIsAutoRefreshPaused(true);
-    }
-
-    function resumeAutoRefresh() {
-        setIsAutoRefreshPaused(false);
-    }
-
-    const pendingUpdateRef = useRef<NodeJS.Timeout | null>(null);
     const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
     const activeTurnIdRef = useRef<string | null>(null);
 
@@ -154,22 +140,10 @@ export function CombatProvider({
         });
     }, [combat, user?.id]);
 
-    // Fallback polling interval — longer when Pusher is active
-    const PUSHER_ACTIVE = !!process.env.NEXT_PUBLIC_PUSHER_KEY;
-    const REFRESH_INTERVAL = PUSHER_ACTIVE ? 30000 : 10000;
-    const intervalRef = useRef<NodeJS.Timeout | null>(null);
-    const countdownRef = useRef<NodeJS.Timeout | null>(null);
-    const [nextRefreshIn, setNextRefreshIn] = useState(REFRESH_INTERVAL / 1000);
-
     const refreshCombat = useCallback(async () => {
         if (!combatId) return;
         await loadCombat(combatId);
-        setNextRefreshIn(REFRESH_INTERVAL / 1000);
     }, [combatId]);
-
-    useEffect(() => {
-        if (isAutoRefreshPaused) setNextRefreshIn(0);
-    }, [isAutoRefreshPaused]);
 
     // Pusher: subscribe to real-time combat updates
     useEffect(() => {
@@ -179,38 +153,18 @@ export function CombatProvider({
 
         const channel = pusher.subscribe(`combat-${combatId}`);
         channel.bind("updated", () => {
-            if (!isAutoRefreshPaused) loadCombat(combatId);
+            loadCombat(combatId);
         });
 
         return () => {
             channel.unbind_all();
             pusher.unsubscribe(`combat-${combatId}`);
         };
-    }, [combatId, isAutoRefreshPaused]);
+    }, [combatId]);
 
-    // Fallback polling (slower when Pusher is configured)
     useEffect(() => {
-        if (!combatId) return;
-        if (isAutoRefreshPaused) return;
-
-        refreshCombat();
-
-        intervalRef.current = setInterval(() => {
-            refreshCombat();
-        }, REFRESH_INTERVAL);
-
-        countdownRef.current = setInterval(() => {
-            setNextRefreshIn((prev) => {
-                if (prev <= 1) return REFRESH_INTERVAL / 1000;
-                return prev - 1;
-            });
-        }, 1000);
-
-        return () => {
-            if (intervalRef.current) clearInterval(intervalRef.current);
-            if (countdownRef.current) clearInterval(countdownRef.current);
-        };
-    }, [combatId, refreshCombat, isAutoRefreshPaused]);
+        if (combatId) loadCombat(combatId);
+    }, [combatId]);
 
     async function loadCombat(id = combatId) {
         if (!id) return;
@@ -437,7 +391,6 @@ export function CombatProvider({
 
         try {
             setIsLoading(true);
-            pauseAutoRefresh();
 
             await api.post("/combat/react", {
                 rollId,
@@ -447,10 +400,8 @@ export function CombatProvider({
             });
 
             await loadCombat();
-            resumeAutoRefresh();
         } catch (err) {
             toast.error(apiErrorMessage(err, "Erro ao reagir"));
-            resumeAutoRefresh();
         } finally {
             setIsLoading(false);
         }
@@ -478,10 +429,6 @@ export function CombatProvider({
                 endCombat,
                 resolveReaction,
                 refreshCombat,
-                nextRefreshIn,
-                pauseAutoRefresh,
-                resumeAutoRefresh,
-                isAutoRefreshPaused,
             }}
         >
             {children}

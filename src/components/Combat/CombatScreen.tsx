@@ -185,8 +185,7 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
   const {
     combat, isMyTurn, actionUsed, myCharacterIds, selectedTargets,
     selectTarget, useMainAction, endTurn, endCombat, pendingReactionRoll,
-    resolveReaction, refreshCombat, nextRefreshIn,
-    pauseAutoRefresh, resumeAutoRefresh, isAutoRefreshPaused,
+    resolveReaction, refreshCombat,
     isLoading, combatStats, clearStats,
   } = useCombat();
 
@@ -382,11 +381,7 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
       <Box sx={{ borderBottom: "1px solid #333", display: "flex", alignItems: "center", justifyContent: "space-between", px: 3 }}>
         <Stack direction="row" spacing={3} alignItems="center">
           <Typography variant="h6">Round {combat.round}</Typography>
-          <Typography fontSize={12} color="#aaa">Atualiza em {nextRefreshIn}s</Typography>
           <Button size="small" variant="outlined" onClick={refreshCombat}>Atualizar agora</Button>
-          <Button size="small" variant="outlined" onClick={isAutoRefreshPaused ? resumeAutoRefresh : pauseAutoRefresh}>
-            {isAutoRefreshPaused ? "Retomar Auto-Update" : "Pausar Auto-Update"}
-          </Button>
           {!isMaster && <DiceInputRoller characterId={myCharacterIds[0]} />}
         </Stack>
 
