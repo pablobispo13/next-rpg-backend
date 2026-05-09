@@ -2,7 +2,7 @@
 import { NextApiResponse } from "next";
 import { authenticate, AuthenticatedRequest } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
-import { ActionType, AttributeType, TargetType } from "@prisma/client";
+import { ActionType, AttributeType, EffectType, TargetType } from "@prisma/client";
 
 
 async function handler(
@@ -72,10 +72,12 @@ async function handler(
       requiresTurn,
       allowOutOfCombat,
       appliesEffect,
+      isAreaEffect,
       attribute,
       durationTurns,
       statAffected,
       effectAmount,
+      effectType,
       statusApplied,
     } = req.body;
 
@@ -94,10 +96,12 @@ async function handler(
         requiresTurn: requiresTurn ?? undefined,
         allowOutOfCombat: allowOutOfCombat ?? undefined,
         appliesEffect: appliesEffect ?? undefined,
+        isAreaEffect: isAreaEffect ?? undefined,
         attribute: attribute ? (attribute as AttributeType) : undefined,
         durationTurns: durationTurns ?? undefined,
         statAffected: statAffected ?? undefined,
         effectAmount: effectAmount ?? undefined,
+        effectType: effectType !== undefined ? (effectType as EffectType | null) : undefined,
         statusApplied: statusApplied ?? undefined,
       },
       include: {

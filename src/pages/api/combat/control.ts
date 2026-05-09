@@ -118,8 +118,9 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 where: { combatId, characterId: participant.characterId }
             });
 
+            const char = await prisma.character.findUnique({ where: { id: participant.characterId } });
+
             for (const effect of activeEffects) {
-                const char = await prisma.character.findUnique({ where: { id: participant.characterId } });
                 if (!char) continue;
 
                 if (effect.type === "HEAL_OVER_TIME" && combatParticipantForEffect) {
@@ -158,6 +159,37 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 if (effect.remainingTurns - 1 <= 0) {
                     await prisma.characterEffect.delete({ where: { id: effect.id } });
                 }
+            }
+
+            // STUN: personagem atordoado pula o turno automaticamente
+            const isStunned = activeEffects.some(e => e.type === "STUN");
+            if (isStunned && char) {
+                await prisma.actionLog.create({
+                    data: {
+                        type: LogType.TURN_START,
+                        message: `${char.name} está atordoado e perdeu o turno`,
+                        characterId: participant.characterId,
+                        combatId,
+                        turnId: turn.id,
+                    },
+                });
+                await prisma.combatTurn.update({ where: { id: turn.id }, data: { endedAt: new Date() } });
+
+                // Avança o índice do turno (mesma lógica do endTurn)
+                const sortedParticipants = [...combat.participants].sort((a, b) => (a.turnOrder ?? 0) - (b.turnOrder ?? 0));
+                let nextIndex = currentIndex + 1;
+                let nextRound = combat.round;
+                for (let i = 0; i < sortedParticipants.length; i++) {
+                    if (nextIndex >= sortedParticipants.length) { nextIndex = 0; nextRound++; }
+                    if (sortedParticipants[nextIndex].currentLife > 0) break;
+                    nextIndex++;
+                }
+                await prisma.combat.update({ where: { id: combatId }, data: { currentTurnIndex: nextIndex, round: nextRound } });
+
+                const turnFull = await prisma.combatTurn.findUnique({ where: { id: turn.id }, include: { rollResults: true, logs: true } });
+                notifyCombatUpdate(combatId);
+                res.status(201).json({ ...turnFull, skipped: true, reason: "STUN" });
+                return;
             }
 
             await prisma.actionLog.create({
@@ -350,6 +382,16 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                     })
                 )
             );
+
+            // Remove all active effects and temp HP from all participants
+            const participantCharacterIds = finalParticipants.map((p) => p.characterId);
+            await prisma.characterEffect.deleteMany({
+                where: { characterId: { in: participantCharacterIds } },
+            });
+            await prisma.combatParticipant.updateMany({
+                where: { combatId },
+                data: { tempHp: 0 },
+            });
 
             await prisma.combat.update({ where: { id: combatId }, data: { active: false } });
             await prisma.actionLog.create({ data: { type: LogType.COMBAT_END, message: "Combate finalizado", combatId } });

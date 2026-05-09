@@ -48,6 +48,64 @@ import { Reorder, motion, AnimatePresence } from "framer-motion";
 
 type HpTier = { label: string; color: string; bgColor: string };
 
+const EFFECT_META: Record<string, { icon: string; label: string; color: string; bg: string }> = {
+  STAT_BUFF:       { icon: "↑", label: "Buff",        color: "#4ade80", bg: "rgba(74,222,128,0.12)" },
+  STAT_DEBUFF:     { icon: "↓", label: "Debuff",      color: "#f87171", bg: "rgba(248,113,113,0.12)" },
+  ROLL_BONUS:      { icon: "+", label: "Bônus",       color: "#60a5fa", bg: "rgba(96,165,250,0.12)" },
+  ROLL_PENALTY:    { icon: "−", label: "Penalidade",  color: "#f97316", bg: "rgba(249,115,22,0.12)" },
+  STUN:            { icon: "💫", label: "Atordoado",   color: "#fbbf24", bg: "rgba(251,191,36,0.12)" },
+  HEAL_OVER_TIME:  { icon: "♥", label: "Regen",       color: "#34d399", bg: "rgba(52,211,153,0.12)" },
+  DAMAGE_OVER_TIME:{ icon: "☠", label: "DoT",         color: "#ef4444", bg: "rgba(239,68,68,0.12)" },
+};
+
+const ATTR_SHORT: Record<string, string> = {
+  STRENGTH: "FOR", AGILITY: "AGI", VIGOR: "VIG", INTELLECT: "INT", PRESENCE: "PRE",
+};
+
+function HpBar({ current, max, tempHp, height = 7 }: { current: number; max: number; tempHp?: number; height?: number }) {
+  const tier = getHpTier(current, max);
+  const hpPct  = max > 0 ? Math.min(100, (current / max) * 100) : 0;
+  const tmpPct = (max > 0 && (tempHp ?? 0) > 0)
+    ? Math.min(100 - hpPct, ((tempHp ?? 0) / max) * 100)
+    : 0;
+
+  return (
+    <Box sx={{ height, borderRadius: height / 2, bgcolor: "#2a2a3a", position: "relative", overflow: "hidden" }}>
+      <Box sx={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${hpPct}%`, bgcolor: tier.color, transition: "width 0.6s ease" }} />
+      {tmpPct > 0 && (
+        <Box sx={{ position: "absolute", left: `${hpPct}%`, top: 0, bottom: 0, width: `${tmpPct}%`, bgcolor: "#60a5fa", transition: "width 0.6s ease", opacity: 0.85 }} />
+      )}
+    </Box>
+  );
+}
+
+const EFFECT_SHOWS_STAT  = new Set(["STAT_BUFF", "STAT_DEBUFF"]);
+const EFFECT_SHOWS_VALUE = new Set(["STAT_BUFF", "STAT_DEBUFF", "ROLL_BONUS", "ROLL_PENALTY", "HEAL_OVER_TIME", "DAMAGE_OVER_TIME"]);
+
+function EffectChips({ effects, tempHp }: { effects: any[]; tempHp?: number }) {
+  const chips: React.ReactNode[] = [];
+
+  for (const eff of effects ?? []) {
+    const meta = EFFECT_META[eff.type] ?? { icon: "?", label: eff.type, color: "#888", bg: "rgba(136,136,136,0.1)" };
+    const statSuffix  = EFFECT_SHOWS_STAT.has(eff.type) && eff.statAffected ? ` ${ATTR_SHORT[eff.statAffected] ?? eff.statAffected}` : "";
+    const valSuffix   = EFFECT_SHOWS_VALUE.has(eff.type) && eff.value ? ` ${eff.value > 0 ? "+" : ""}${eff.value}` : "";
+    const turnsSuffix = eff.remainingTurns > 1 ? ` (${eff.remainingTurns})` : "";
+    chips.push(
+      <Chip key={eff.id} size="small"
+        label={`${meta.icon}${statSuffix}${valSuffix}${turnsSuffix}`}
+        title={`${meta.label}${statSuffix}${valSuffix} — ${eff.remainingTurns} turno${eff.remainingTurns !== 1 ? "s" : ""} restante${eff.remainingTurns !== 1 ? "s" : ""}`}
+        sx={{ fontSize: 9, height: 16, bgcolor: meta.bg, color: meta.color, border: `1px solid ${meta.color}40` }} />
+    );
+  }
+
+  if (chips.length === 0) return null;
+  return (
+    <Stack direction="row" flexWrap="wrap" gap={0.4} mt={0.5}>
+      {chips}
+    </Stack>
+  );
+}
+
 function getHpTier(currentLife: number, maxLife: number): HpTier {
   if (currentLife <= 0) return { label: "Morto", color: "#666", bgColor: "#66666620" };
   const pct = maxLife > 0 ? currentLife / maxLife : 0;
@@ -184,7 +242,7 @@ export default function CombatScreen({ combatId }: CombatScreenProps) {
 function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
   const {
     combat, isMyTurn, actionUsed, myCharacterIds, selectedTargets,
-    selectTarget, useMainAction, endTurn, endCombat, pendingReactionRoll,
+    selectTarget, clearTargets, useMainAction, endTurn, endCombat, pendingReactionRoll,
     resolveReaction, refreshCombat,
     isLoading, combatStats, clearStats,
   } = useCombat();
@@ -212,6 +270,13 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
   // Fullscreen battlefield
   const [battleFullscreen, setBattleFullscreen] = useState(false);
   const battleIframeRef = useRef<HTMLIFrameElement>(null);
+
+  // Armed preset (user must pick an action before selecting targets)
+  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (actionUsed || !isMyTurn) setSelectedPresetId(null);
+  }, [actionUsed, isMyTurn]);
 
   function handleBattleFullscreen() {
     if (battleIframeRef.current?.requestFullscreen) {
@@ -381,6 +446,13 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
   const canAct = isMyTurn && !pendingReactionRoll && !actionUsed;
   const canEndTurn = isMyTurn && !pendingReactionRoll;
 
+  // Derived from the currently armed preset
+  const selectedPreset = presetsSource.presets?.find(
+    (p: ActionPresetType & { isAreaEffect?: boolean }) => p.id === selectedPresetId
+  ) as (ActionPresetType & { isAreaEffect?: boolean }) | undefined;
+  const isAoe = !!(selectedPreset?.isAreaEffect) || selectedPreset?.targetType === "MULTIPLE";
+  const isHealPreset = selectedPreset?.type === "HEAL" || selectedPreset?.type === "SUPPORT";
+
   return (
     <Box sx={{ height: "100vh", display: "grid", gridTemplateRows: "80px 1fr 0px", backgroundColor: "#0e0e1a", color: "#fff", overflow: "hidden" }}>
       <Head><title>Tela de combate</title></Head>
@@ -478,11 +550,20 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
                     </AnimatePresence>
 
                     <Card
-                      onClick={() => canAct && p.character.id !== activeCharacter.id && selectTarget(p.character.id)}
+                      onClick={() => {
+                        if (!canAct || !selectedPresetId) return;
+                        const isSelf = p.character.id === activeCharacter.id;
+                        if (isSelf && !isHealPreset) return;
+                        selectTarget(p.character.id, isAoe);
+                      }}
                       sx={{
-                        cursor: canAct && p.character.id !== activeCharacter.id ? "pointer" : isMaster ? "grab" : "default",
-                        backgroundColor: isTarget ? "rgba(239,83,80,0.15)" : isActive ? "rgba(42,42,85,0.8)" : "rgba(28,28,46,0.6)",
-                        border: isActive ? "2px solid #4fc3f7" : isTarget ? "2px solid #ef5350" : "1px solid rgba(51,51,51,0.8)",
+                        cursor: canAct && selectedPresetId && (p.character.id !== activeCharacter.id || isHealPreset) ? "pointer" : isMaster ? "grab" : "default",
+                        backgroundColor: isTarget
+                          ? (isHealPreset ? "rgba(74,222,128,0.15)" : "rgba(239,83,80,0.15)")
+                          : (isHealPreset && p.character.id === activeCharacter.id && canAct ? "rgba(74,222,128,0.05)" : isActive ? "rgba(42,42,85,0.8)" : "rgba(28,28,46,0.6)"),
+                        border: isActive ? "2px solid #4fc3f7"
+                          : isTarget ? (isHealPreset ? "2px solid #4ade80" : "2px solid #ef5350")
+                          : (isHealPreset && p.character.id === activeCharacter.id && canAct ? "1px solid rgba(74,222,128,0.35)" : "1px solid rgba(51,51,51,0.8)"),
                         opacity: p.currentLife <= 0 ? 0.45 : 1,
                         transition: "background 0.3s, border 0.3s, opacity 0.3s",
                       }}
@@ -515,14 +596,25 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
                         {/* HP */}
                         {showExactHp ? (
                           <>
-                            <LinearProgress value={hpPct} variant="determinate" sx={{ height: 7, borderRadius: 4, bgcolor: "#333", "& .MuiLinearProgress-bar": { bgcolor: tier.color, transition: "width 0.6s ease" } }} />
-                            <Typography fontSize={11} color="#aaa" mt={0.5}>{p.currentLife} / {p.character.maxLife} HP</Typography>
+                            <HpBar current={p.currentLife} max={p.character.maxLife} tempHp={p.tempHp ?? 0} />
+                            <Stack direction="row" alignItems="center" spacing={0.75} mt={0.5}>
+                              <Typography fontSize={11} color="#aaa">{p.currentLife} / {p.character.maxLife} HP</Typography>
+                              {(p.tempHp ?? 0) > 0 && (
+                                <Box sx={{ display: "flex", alignItems: "center", gap: 0.4, px: 0.75, py: 0.1, borderRadius: 1, bgcolor: "rgba(96,165,250,0.15)", border: "1px solid rgba(96,165,250,0.4)" }}>
+                                  <Typography fontSize={10} lineHeight={1}>🛡</Typography>
+                                  <Typography fontSize={11} color="#60a5fa" fontWeight={700} lineHeight={1}>{p.tempHp}</Typography>
+                                </Box>
+                              )}
+                            </Stack>
                           </>
                         ) : (
                           <Box mt={0.75} sx={{ px: 1.5, py: 0.4, borderRadius: 1, bgcolor: tier.bgColor, border: `1px solid ${tier.color}40`, display: "inline-block" }}>
                             <Typography fontSize={11} color={tier.color} fontWeight={600}>{tier.label}</Typography>
                           </Box>
                         )}
+
+                        {/* Active effects */}
+                        <EffectChips effects={p.character.statusEffects} />
                       </CardContent>
                     </Card>
                   </Reorder.Item>
@@ -588,7 +680,9 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
           <Stack direction="row" spacing={1.5} flexWrap="wrap">
             {presetsSource.presets?.map((preset: ActionPresetType & { isAreaEffect?: boolean }) => {
               const needsTarget = preset.targetType !== "SELF";
-              const isAoe = preset.isAreaEffect || preset.targetType === "MULTIPLE";
+              const presetIsAoe = !!(preset.isAreaEffect) || preset.targetType === "MULTIPLE";
+              const isArmed = selectedPresetId === preset.id;
+              const presetIsHeal = preset.type === "HEAL" || preset.type === "SUPPORT";
               if (["TEST", "SKILL", "REACT"].includes(preset.type)) return null;
 
               return (
@@ -601,15 +695,34 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
                 >
                   <Box sx={{ position: "relative" }}>
                     <Button
-                      variant={preset.requiresTurn ? "contained" : "outlined"}
-                      color={preset.requiresTurn ? "primary" : "inherit"}
-                      disabled={!canAct || isLoading || (preset.requiresTurn && actionUsed) || (needsTarget && selectedTargets.length === 0)}
-                      onClick={() => useMainAction({ presetId: preset.id, targetIds: needsTarget ? selectedTargets : [], characterId: activeCharacter.id })}
-                      sx={{ transition: "all 0.3s", pr: isAoe ? 4 : undefined, "&:hover:not(:disabled)": { boxShadow: "0 0 12px rgba(107,122,219,0.5)", transform: "translateY(-2px)" } }}
+                      variant={isArmed ? "contained" : preset.requiresTurn ? "contained" : "outlined"}
+                      color={isArmed ? (presetIsHeal ? "success" : "secondary") : preset.requiresTurn ? "primary" : "inherit"}
+                      disabled={!canAct || isLoading || (preset.requiresTurn && actionUsed)}
+                      onClick={() => {
+                        if (!canAct || isLoading || (preset.requiresTurn && actionUsed)) return;
+                        if (!needsTarget) {
+                          useMainAction({ presetId: preset.id, targetIds: [], characterId: activeCharacter.id });
+                          return;
+                        }
+                        if (isArmed && selectedTargets.length > 0) {
+                          useMainAction({ presetId: preset.id, targetIds: selectedTargets, characterId: activeCharacter.id });
+                          setSelectedPresetId(null);
+                        } else {
+                          if (selectedPresetId !== preset.id) clearTargets();
+                          setSelectedPresetId(preset.id);
+                        }
+                      }}
+                      sx={{
+                        transition: "all 0.3s",
+                        pr: presetIsAoe ? 4 : undefined,
+                        outline: isArmed ? "2px solid rgba(167,139,250,0.7)" : "none",
+                        outlineOffset: 2,
+                        "&:hover:not(:disabled)": { boxShadow: "0 0 12px rgba(107,122,219,0.5)", transform: "translateY(-2px)" },
+                      }}
                     >
                       {preset.name}
                     </Button>
-                    {isAoe && (
+                    {presetIsAoe && (
                       <Chip label="Área" size="small" sx={{ position: "absolute", top: -8, right: -8, height: 16, fontSize: 9, bgcolor: "#7c3aed", color: "#fff", pointerEvents: "none" }} />
                     )}
                   </Box>
@@ -625,11 +738,20 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
             )}
           </Stack>
 
-          {canAct && selectedTargets.length === 0 && presetsSource.presets?.some((p: ActionPresetType) => p.targetType !== "SELF") && (
-            <Typography fontSize={12} color="#ff9800">Selecione um alvo ou passe a rodada.</Typography>
+          {canAct && !selectedPresetId && (
+            <Typography fontSize={12} color="#ff9800">Selecione uma habilidade acima para agir.</Typography>
           )}
-          {canAct && selectedTargets.length > 1 && (
-            <Typography fontSize={12} color="#a78bfa">🎯 {selectedTargets.length} alvos selecionados — ataque em múltiplos inimigos</Typography>
+          {canAct && selectedPresetId && selectedTargets.length === 0 && (
+            <Typography fontSize={12} color="#4fc3f7">
+              {isAoe ? "🎯 Selecione um ou mais alvos" : "🎯 Selecione um alvo"}
+              {isHealPreset ? " (você mesmo ou qualquer participante)" : " inimigo"}
+              {" "}— então clique em <strong>{selectedPreset?.name}</strong> para executar.
+            </Typography>
+          )}
+          {canAct && selectedPresetId && selectedTargets.length > 0 && (
+            <Typography fontSize={12} color="#a78bfa">
+              🎯 {selectedTargets.length} alvo{selectedTargets.length > 1 ? "s" : ""} selecionado{selectedTargets.length > 1 ? "s" : ""} — clique em <strong>{selectedPreset?.name}</strong> para executar.
+            </Typography>
           )}
         </Stack>
       </Box>
@@ -874,9 +996,17 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
 
                         {showExactHp ? (
                           <>
-                            <LinearProgress value={hpPct} variant="determinate" sx={{ height: 10, borderRadius: 5, bgcolor: "#333", mb: 0.5, "& .MuiLinearProgress-bar": { bgcolor: tier.color } }} />
-                            <Stack direction="row" justifyContent="space-between">
-                              <Typography fontSize={12} color="#aaa">{p.currentLife} / {p.character.maxLife} HP</Typography>
+                            <HpBar current={p.currentLife} max={p.character.maxLife} tempHp={p.tempHp ?? 0} height={10} />
+                            <Stack direction="row" justifyContent="space-between" alignItems="center" mt={0.5}>
+                              <Stack direction="row" alignItems="center" spacing={0.75}>
+                                <Typography fontSize={12} color="#aaa">{p.currentLife} / {p.character.maxLife} HP</Typography>
+                                {(p.tempHp ?? 0) > 0 && (
+                                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, px: 1, py: 0.2, borderRadius: 1, bgcolor: "rgba(96,165,250,0.15)", border: "1px solid rgba(96,165,250,0.4)" }}>
+                                    <Typography fontSize={11} lineHeight={1}>🛡</Typography>
+                                    <Typography fontSize={12} color="#60a5fa" fontWeight={700} lineHeight={1}>{p.tempHp}</Typography>
+                                  </Box>
+                                )}
+                              </Stack>
                               <Typography fontSize={12} color={tier.color} fontWeight={600}>{tier.label}</Typography>
                             </Stack>
                           </>
