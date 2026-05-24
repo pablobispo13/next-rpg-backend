@@ -16,9 +16,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!valid) return res.status(401).json({ message: "Senha incorreta" });
 
   const token = jwt.sign(
-    { userId: user.id, role: user.role, username: user.username },
+    { userId: user.id, role: user.role, username: user.username, isAdmin: user.isAdmin },
     process.env.JWT_SECRET!,
     { expiresIn: "7d" }
   );
-  res.json({ token, user: { id: user.id, username: user.username, email: user.email, role: user.role } });
+  res.json({ token, user: { id: user.id, username: user.username, email: user.email, role: user.role, isAdmin: user.isAdmin } });
 }

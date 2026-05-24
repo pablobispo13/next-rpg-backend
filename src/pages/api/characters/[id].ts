@@ -63,6 +63,12 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       counterAttackPresetId,
     } = req.body;
 
+    // image só pode ser alterada por admin (curadoria centralizada)
+    const allowImage = user.isAdmin;
+    if (!allowImage && image !== undefined && image !== character.image) {
+      // não-admin enviou image diferente: ignora silenciosamente
+    }
+
     const updated = await prisma.character.update({
       where: { id },
       data: {
@@ -78,7 +84,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         baseDefense,
         history,
         notes,
-        image: image || null,
+        ...(allowImage ? { image: image || null } : {}),
         dodgePresetId,
         blockPresetId,
         counterAttackPresetId,

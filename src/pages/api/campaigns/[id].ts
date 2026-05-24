@@ -11,7 +11,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     return;
   }
 
-  const access = await getCampaignAccess(user, id);
+  // GET e PATCH permitem ver/editar mesa arquivada (mestre precisa pra restaurar)
+  const access = await getCampaignAccess(user, id, { allowArchived: true });
   if (!access) {
     res.status(404).json({ message: "Mesa não encontrada" });
     return;

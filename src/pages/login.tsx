@@ -60,7 +60,13 @@ export default function LoginPage() {
   }, []);
 
   useEffect(() => {
-    if (user) router.replace("/protected/");
+    if (!user) return;
+    const pendingCode = localStorage.getItem("pending_invite_code");
+    if (pendingCode) {
+      router.replace(`/protected/join?code=${pendingCode}`);
+    } else {
+      router.replace("/protected/");
+    }
   }, [user, router]);
 
   return (

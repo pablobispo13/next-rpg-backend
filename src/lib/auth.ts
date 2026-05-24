@@ -5,6 +5,7 @@ export type AuthUser = {
   userId: string;
   role: "MESTRE" | "JOGADOR";
   username: string;
+  isAdmin: boolean;
 };
 
 export type CampaignScope = {
@@ -40,6 +41,7 @@ export function authenticate(
         userId: decoded.userId,
         role: decoded.role,
         username: decoded.username,
+        isAdmin: !!decoded.isAdmin,
       };
 
       return handler(req, res);

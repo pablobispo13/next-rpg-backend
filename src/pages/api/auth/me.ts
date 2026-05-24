@@ -38,6 +38,7 @@ export default async function handler(
                 username: true,
                 email: true,
                 role: true,
+                isAdmin: true,
                 characters: true
             },
         });

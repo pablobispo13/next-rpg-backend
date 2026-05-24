@@ -13,7 +13,8 @@ export type CampaignAccess = {
  */
 export async function getCampaignAccess(
   user: AuthUser,
-  campaignId: string
+  campaignId: string,
+  opts?: { allowArchived?: boolean }
 ): Promise<CampaignAccess | null> {
   const campaign = await prisma.campaign.findUnique({
     where: { id: campaignId },
@@ -21,7 +22,7 @@ export async function getCampaignAccess(
   });
 
   if (!campaign) return null;
-  if (campaign.archivedAt) return null;
+  if (campaign.archivedAt && !opts?.allowArchived) return null;
 
   const isMaster = campaign.masterId === user.userId;
   let isMember = isMaster;

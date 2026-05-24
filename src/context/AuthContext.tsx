@@ -10,6 +10,7 @@ type User = {
   id: string;
   role: "MESTRE" | "JOGADOR";
   username: string;
+  isAdmin: boolean;
   characterIds: string[];
 };
 
@@ -55,12 +56,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
+  const postLoginRedirect = () => {
+    // Convite pendente: prioriza retornar pra tela de join
+    const pendingCode = typeof window !== "undefined"
+      ? localStorage.getItem("pending_invite_code")
+      : null;
+    if (pendingCode) {
+      router.replace(`/protected/join?code=${pendingCode}`);
+      return;
+    }
+    router.replace("/protected/");
+  };
+
   const login = async (email: string, password: string) => {
     const { data } = await api.post("/auth/login", { email, password });
     localStorage.setItem("token", data.token);
     setToken(data.token);
     setUser(data.user);
-    router.replace("/protected/");
+    postLoginRedirect();
   };
 
   const register = async (username: string, email: string, password: string) => {
@@ -68,7 +81,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("token", data.token);
     setToken(data.token);
     setUser(data.user);
-    router.replace("/protected/");
+    postLoginRedirect();
   };
 
   const logout = (reason?: "expired" | "manual") => {

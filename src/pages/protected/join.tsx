@@ -8,16 +8,28 @@ import api from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import { useCampaign } from "../../context/CampaignContext";
 
+const PENDING_INVITE_KEY = "pending_invite_code";
+
 export default function JoinPage() {
   const router = useRouter();
   const params = useSearchParams();
   const codeFromUrl = (params.get("code") || "").toUpperCase();
   const { user, loading: authLoading } = useAuth();
-  const { reload, setActiveCampaign, campaigns } = useCampaign();
+  const { reload } = useCampaign();
 
   const [code, setCode] = useState(codeFromUrl);
   const [submitting, setSubmitting] = useState(false);
   const [autoTried, setAutoTried] = useState(false);
+
+  // Se não está autenticado, salva o código e redireciona pra login
+  useEffect(() => {
+    if (authLoading) return;
+    if (user) return;
+    if (codeFromUrl) {
+      localStorage.setItem(PENDING_INVITE_KEY, codeFromUrl);
+    }
+    router.replace("/login");
+  }, [authLoading, user, codeFromUrl, router]);
 
   // Se vier código pela URL e o usuário estiver autenticado, tenta entrar automaticamente
   useEffect(() => {
@@ -36,13 +48,14 @@ export default function JoinPage() {
     try {
       const { data } = await api.post("/campaigns/join", { code: trimmed });
       toast.success(data.alreadyMember ? "Você já era membro" : `Entrou em ${data.campaignName}`);
+      localStorage.removeItem(PENDING_INVITE_KEY);
+      // Marca a mesa recém-entrada como ativa antes do reload (que vai resolver pelo savedId)
+      localStorage.setItem("activeCampaignId", data.campaignId);
       await reload();
-      // Tenta ativar a mesa recém-entrada
-      const refreshed = campaigns.find((c) => c.id === data.campaignId);
-      if (refreshed) setActiveCampaign(refreshed);
       router.replace("/protected/");
     } catch {
-      // toast tratado pelo interceptor
+      // Em caso de erro (convite expirado, etc) também limpa pra não ficar tentando
+      localStorage.removeItem(PENDING_INVITE_KEY);
     } finally {
       setSubmitting(false);
     }

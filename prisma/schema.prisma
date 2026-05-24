@@ -87,7 +87,7 @@ model User {
   email     String   @unique
   password  String
   role      Role
-  streamUrl String?
+  isAdmin   Boolean  @default(false)
   createdAt DateTime @default(now())
 
   characters       Character[]

@@ -56,6 +56,15 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       res.status(400).json({ message: "inviteId obrigatório" });
       return;
     }
+    // Garante que o convite pertence à mesa do path
+    const existing = await prisma.campaignInvite.findUnique({
+      where: { id: inviteId },
+      select: { campaignId: true },
+    });
+    if (!existing || existing.campaignId !== id) {
+      res.status(404).json({ message: "Convite não encontrado nesta mesa" });
+      return;
+    }
     const invite = await prisma.campaignInvite.update({
       where: { id: inviteId },
       data: { active: !!active },

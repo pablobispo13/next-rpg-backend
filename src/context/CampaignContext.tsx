@@ -40,7 +40,7 @@ const CampaignContext = createContext<CampaignContextProps>({} as CampaignContex
 const ACTIVE_KEY = "activeCampaignId";
 
 export function CampaignProvider({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const [campaigns, setCampaigns] = useState<CampaignSummary[]>([]);
   const [activeCampaign, setActiveCampaignState] = useState<CampaignSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -53,6 +53,11 @@ export function CampaignProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const reload = useCallback(async (opts?: { includeArchived?: boolean }) => {
+    // Enquanto auth ainda carrega, mantém loading=true e espera resolver
+    if (authLoading) {
+      setLoading(true);
+      return;
+    }
     if (!isAuthenticated) {
       setCampaigns([]);
       setActiveCampaignState(null);
@@ -82,7 +87,7 @@ export function CampaignProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated, setActiveCampaign]);
+  }, [isAuthenticated, authLoading, setActiveCampaign]);
 
   useEffect(() => {
     reload();

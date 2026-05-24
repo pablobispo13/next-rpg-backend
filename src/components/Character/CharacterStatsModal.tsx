@@ -20,6 +20,8 @@ import {
   calculateMaxLife,
   calculateDefense,
 } from "../../lib/characterCalculations";
+import { useAuth } from "../../context/AuthContext";
+import { ImagePicker } from "./ImagePicker";
 
 type Props = {
   open: boolean;
@@ -52,6 +54,8 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 export function CharacterStatsModal({ open, character, onClose }: Props) {
+  const { user } = useAuth();
+  const isAdmin = !!user?.isAdmin;
   const [form, setForm] = useState(BLANK);
   const [saving, setSaving] = useState(false);
 
@@ -136,7 +140,7 @@ export function CharacterStatsModal({ open, character, onClose }: Props) {
           <SectionLabel>Identificação</SectionLabel>
           <Stack direction="row" spacing={2} alignItems="flex-start">
             <Avatar
-              src={form.image || undefined}
+              src={form.image ? `/characters/${form.image}` : undefined}
               sx={{ width: 64, height: 64, mt: 1, flexShrink: 0 }}
             >
               {form.name?.[0]?.toUpperCase()}
@@ -148,16 +152,16 @@ export function CharacterStatsModal({ open, character, onClose }: Props) {
                 onChange={(e) => update("name", e.target.value)}
                 fullWidth
               />
-              <TextField
-                label="URL da Imagem"
-                value={form.image}
-                onChange={(e) => update("image", e.target.value)}
-                fullWidth
-                placeholder="https://..."
-                helperText="Link de imagem para o avatar do personagem"
-              />
             </Stack>
           </Stack>
+
+          {/* Seletor de imagem — apenas para admin */}
+          {isAdmin && (
+            <ImagePicker
+              value={form.image}
+              onChange={(filename) => update("image", filename)}
+            />
+          )}
 
           <Divider />
 

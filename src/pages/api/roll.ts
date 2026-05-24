@@ -42,14 +42,21 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             return res.status(403).json({ message: "Sem acesso a este personagem" });
         }
 
-        // Se um combatId específico foi passado, valida que ele pertence à mesa do header (se fornecida)
-        if (combatId && combatId !== "none" && campaignId) {
+        // Se combatId foi passado, valida acesso à mesa daquele combate
+        if (combatId && combatId !== "none") {
             const combat = await prisma.combat.findUnique({
                 where: { id: String(combatId) },
                 select: { campaignId: true },
             });
-            if (!combat || combat.campaignId !== campaignId) {
+            if (!combat) return res.status(404).json({ message: "Combate não encontrado" });
+            if (campaignId && combat.campaignId !== campaignId) {
                 return res.status(403).json({ message: "Combate não pertence à mesa ativa" });
+            }
+            // Sem header: ainda valida que o user tem acesso à mesa do combate
+            if (!campaignId) {
+                const { getCampaignAccess } = await import("../../lib/campaignAccess");
+                const access = await getCampaignAccess(req.user!, combat.campaignId);
+                if (!access) return res.status(403).json({ message: "Sem acesso a este combate" });
             }
         }
 
