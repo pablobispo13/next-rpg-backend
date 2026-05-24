@@ -40,6 +40,8 @@ import Head from "next/head";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "react-toastify";
 import { useActiveStream } from "../../lib/useActiveStream";
+import { useCampaign } from "../../context/CampaignContext";
+import { isNpc as checkIsNpc } from "../../lib/isNpc";
 import { Reorder, motion, AnimatePresence } from "framer-motion";
 
 /* =========================
@@ -248,6 +250,8 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
   } = useCombat();
 
   const router = useRouter();
+  const { activeCampaign } = useCampaign();
+  const masterId = activeCampaign?.masterId ?? null;
 
   // Add participant
   const [addParticipantOpen, setAddParticipantOpen] = useState(false);
@@ -502,7 +506,7 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
               {orderedParticipants.map((p: any, index: number) => {
                 const isActive = p.turnOrder === combat.currentTurnIndex;
                 const isTarget = selectedTargets.includes(p.character.id);
-                const isNpc = p.character.owner?.role === "MESTRE";
+                const isNpc = checkIsNpc(p.character, masterId);
                 const showExactHp = isMaster || !isNpc;
                 const tier = getHpTier(p.currentLife, p.character.maxLife);
                 const hpPct = p.character.maxLife > 0 ? (p.currentLife / p.character.maxLife) * 100 : 0;
@@ -961,7 +965,7 @@ function CombatScreenContent({ isMaster }: { isMaster: boolean }) {
               <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 2 }}>
                 {ordered.map((p: any) => {
                   const isActive = p.turnOrder === combat.currentTurnIndex;
-                  const isNpc = p.character.owner?.role === "MESTRE";
+                  const isNpc = checkIsNpc(p.character, masterId);
                   const showExactHp = isMaster || !isNpc;
                   const tier = getHpTier(p.currentLife, p.character.maxLife);
                   const hpPct = p.character.maxLife > 0 ? (p.currentLife / p.character.maxLife) * 100 : 0;

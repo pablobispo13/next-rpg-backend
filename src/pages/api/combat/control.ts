@@ -1,6 +1,6 @@
 import type { NextApiResponse } from "next";
 import { LogType } from "@prisma/client";
-import { authenticate, AuthenticatedRequest } from "../../../lib/auth";
+import { withCampaign, AuthenticatedRequest } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 import { rollDice } from "../../../lib/dice";
 import { notifyCombatUpdate, notifyCombatListUpdate } from "../../../lib/pusher";
@@ -11,7 +11,20 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         return;
     }
 
+    const { campaignId } = req.campaign!;
     const { action, combatId, participantIds, turnId } = req.body;
+
+    // Para qualquer ação que opere sobre um combatId existente, valida que ele pertence à mesa
+    if (combatId) {
+        const owning = await prisma.combat.findUnique({
+            where: { id: combatId },
+            select: { campaignId: true },
+        });
+        if (!owning || owning.campaignId !== campaignId) {
+            res.status(404).json({ message: "Combate não encontrado nesta mesa" });
+            return;
+        }
+    }
 
     switch (action) {
         case "startCombat": {
@@ -20,8 +33,18 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 return;
             }
 
+            // Garante que todos os participantes pertencem à mesa atual
+            const charsInCampaign = await prisma.character.findMany({
+                where: { id: { in: participantIds }, campaignId },
+                select: { id: true, life: true, agility: true },
+            });
+            if (charsInCampaign.length !== participantIds.length) {
+                res.status(400).json({ message: "Algum personagem não pertence a esta mesa" });
+                return;
+            }
+
             const newCombat = await prisma.combat.create({
-                data: { active: true },
+                data: { active: true, campaignId },
                 include: {
                     participants: true,
                     turns: true,
@@ -31,14 +54,12 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             });
 
             const participants = await Promise.all(
-                participantIds.map(async (pid: string) => {
-                    const char = await prisma.character.findUnique({ where: { id: pid } });
-                    if (!char) throw new Error(`Personagem ${pid} não encontrado`);
-                    return prisma.combatParticipant.create({
+                charsInCampaign.map((char) =>
+                    prisma.combatParticipant.create({
                         data: { combatId: newCombat.id, characterId: char.id, currentLife: char.life },
                         include: { character: true }
-                    });
-                })
+                    })
+                )
             );
 
             const participantsWithInitiative = await Promise.all(
@@ -76,7 +97,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 }
             });
             notifyCombatUpdate(newCombat.id);
-            notifyCombatListUpdate();
+            notifyCombatListUpdate(campaignId);
             res.status(201).json({ combat: combatFull, order: participantsWithInitiative });
             return;
         }
@@ -423,7 +444,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             };
 
             notifyCombatUpdate(combatId);
-            notifyCombatListUpdate();
+            notifyCombatListUpdate(campaignId);
             res.status(200).json({ message: "Combate encerrado", stats });
             return;
         }
@@ -434,4 +455,4 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     }
 }
 
-export default authenticate(handler);
+export default withCampaign(handler);

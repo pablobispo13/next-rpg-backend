@@ -5,7 +5,9 @@ export type Character = {
     image: string;
     baseDefense: number
     // Controle
+    ownerId?: string;
     owner?: CharacterOwner;
+    campaignId?: string;
     history?: string
     notes?: string
 

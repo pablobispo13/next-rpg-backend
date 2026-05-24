@@ -35,6 +35,11 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     config.headers.set("Authorization", `Bearer ${token}`);
   }
 
+  const activeCampaignId = localStorage.getItem("activeCampaignId");
+  if (activeCampaignId) {
+    config.headers.set("x-campaign-id", activeCampaignId);
+  }
+
   return config;
 });
 

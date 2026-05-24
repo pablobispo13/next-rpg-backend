@@ -90,7 +90,59 @@ model User {
   streamUrl String?
   createdAt DateTime @default(now())
 
-  characters Character[]
+  characters       Character[]
+  ownedCampaigns   Campaign[]         @relation("CampaignMaster")
+  campaignMembers  CampaignMember[]
+}
+
+///////////////////////
+// CAMPAIGN (MESA)
+///////////////////////
+
+model Campaign {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  description String?
+  image       String?
+  streamUrl   String?
+  createdAt   DateTime @default(now())
+  archivedAt  DateTime?
+
+  masterId String @db.ObjectId
+  master   User   @relation("CampaignMaster", fields: [masterId], references: [id])
+
+  members      CampaignMember[]
+  invites      CampaignInvite[]
+  characters   Character[]
+  combats      Combat[]
+}
+
+model CampaignMember {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  campaignId String   @db.ObjectId
+  campaign   Campaign @relation(fields: [campaignId], references: [id])
+
+  userId String @db.ObjectId
+  user   User   @relation(fields: [userId], references: [id])
+
+  joinedAt DateTime @default(now())
+
+  @@unique([campaignId, userId])
+}
+
+model CampaignInvite {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  campaignId String   @db.ObjectId
+  campaign   Campaign @relation(fields: [campaignId], references: [id])
+
+  code      String   @unique
+  createdAt DateTime @default(now())
+  expiresAt DateTime?
+  maxUses   Int?
+  uses      Int      @default(0)
+  active    Boolean  @default(true)
 }
 
 ///////////////////////
@@ -126,6 +178,9 @@ model Character {
 
   ownerId String @db.ObjectId
   owner   User   @relation(fields: [ownerId], references: [id])
+
+  campaignId String   @db.ObjectId
+  campaign   Campaign @relation(fields: [campaignId], references: [id])
 
   presets   ActionPreset[] @relation("CharacterPresets")
   inventory Inventory[]
@@ -318,6 +373,9 @@ model Combat {
   hpSnapshots Json[]  @default([])
 
   createdAt DateTime @default(now())
+
+  campaignId String   @db.ObjectId
+  campaign   Campaign @relation(fields: [campaignId], references: [id])
 
   participants CombatParticipant[]
   turns        CombatTurn[]

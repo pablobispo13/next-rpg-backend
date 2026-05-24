@@ -2,6 +2,7 @@ import type { NextApiResponse } from "next";
 import { authenticate, AuthenticatedRequest } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 import { EffectType, LogType } from "@prisma/client";
+import { canActOnCharacter } from "../../../lib/campaignAccess";
 
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
@@ -11,6 +12,11 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
         if (typeof characterId !== "string") {
             res.status(400).json({ message: "characterId obrigatório" });
+            return;
+        }
+
+        if (!(await canActOnCharacter(user, characterId))) {
+            res.status(403).json({ message: "Sem acesso a este personagem" });
             return;
         }
 
@@ -42,6 +48,10 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         }
         if (user.role !== "MESTRE") {
             res.status(403).json({ message: "Apenas o mestre pode aplicar status manualmente" });
+            return;
+        }
+        if (!(await canActOnCharacter(user, characterId))) {
+            res.status(403).json({ message: "Personagem não pertence à sua mesa" });
             return;
         }
 
@@ -80,6 +90,12 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
         if (user.role !== "MESTRE") {
             res.status(403).json({ message: "Apenas o mestre pode remover status" });
+            return;
+        }
+
+        const effect = await prisma.characterEffect.findUnique({ where: { id: effectId } });
+        if (!effect || !(await canActOnCharacter(user, effect.characterId))) {
+            res.status(403).json({ message: "Sem acesso a este efeito" });
             return;
         }
 

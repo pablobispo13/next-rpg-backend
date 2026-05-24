@@ -1,6 +1,7 @@
 import type { NextApiResponse } from "next";
-import { authenticate, AuthenticatedRequest } from "../../../lib/auth";
+import { withCampaign, AuthenticatedRequest } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
+import { isNpc } from "../../../lib/isNpc";
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     if (req.method !== "GET") {
@@ -9,13 +10,21 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     }
 
     const user = req.user!;
+    const { campaignId } = req.campaign!;
     const { limit = 20, skip = 0 } = req.query;
+
+    const campaign = await prisma.campaign.findUnique({
+        where: { id: campaignId },
+        select: { masterId: true },
+    });
+    const masterId = campaign?.masterId ?? null;
 
     const where =
         user.role === "MESTRE"
-            ? { active: false }
+            ? { active: false, campaignId }
             : {
                 active: false,
+                campaignId,
                 participants: {
                     some: { character: { ownerId: user.userId } },
                 },
@@ -29,7 +38,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         include: {
             participants: {
                 include: {
-                    character: { select: { id: true, name: true, maxLife: true, owner: { select: { role: true } } } },
+                    character: { select: { id: true, name: true, maxLife: true, ownerId: true } },
                 },
             },
             logs: {
@@ -44,7 +53,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                     healing: true,
                     success: true,
                     critical: true,
-                    character: { select: { id: true, name: true, owner: { select: { role: true } } } },
+                    character: { select: { id: true, name: true, ownerId: true } },
                 },
             },
         },
@@ -56,7 +65,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         for (const r of combat.rollResults) {
             const charId = r.characterId;
             if (!statsByChar[charId]) {
-                statsByChar[charId] = { name: r.character.name, isNpc: r.character.owner?.role === "MESTRE", totalDamage: 0, totalHealing: 0, hits: 0, misses: 0, maxHit: 0 };
+                statsByChar[charId] = { name: r.character.name, isNpc: isNpc(r.character, masterId), totalDamage: 0, totalHealing: 0, hits: 0, misses: 0, maxHit: 0 };
             }
             if (r.success === true) statsByChar[charId].hits++;
             else if (r.success === false) statsByChar[charId].misses++;
@@ -81,4 +90,4 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     return res.status(200).json({ combats: combatsWithStats });
 }
 
-export default authenticate(handler);
+export default withCampaign(handler);

@@ -1,15 +1,17 @@
 import { NextApiResponse } from "next";
-import { authenticate, AuthenticatedRequest } from "../../../lib/auth";
+import { withCampaign, AuthenticatedRequest } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   const user = req.user!;
+  const { campaignId } = req.campaign!;
 
-  // LISTAR PERSONAGENS
+  // LISTAR PERSONAGENS da mesa
   if (req.method === "GET") {
     const characters =
       user.role === "MESTRE"
         ? await prisma.character.findMany({
+            where: { campaignId },
             orderBy: { name: "asc" },
             include: {
               owner: true,
@@ -45,7 +47,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             },
           })
         : await prisma.character.findMany({
-            where: { ownerId: user.userId },
+            where: { campaignId, ownerId: user.userId },
             orderBy: { name: "asc" },
             include: {
               owner: true,
@@ -64,14 +66,14 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     return;
   }
 
-  // CRIAR PERSONAGEM
+  // CRIAR PERSONAGEM dentro da mesa
   if (req.method === "POST") {
     if (user.role !== "MESTRE") {
       const existing = await prisma.character.findFirst({
-        where: { ownerId: user.userId },
+        where: { ownerId: user.userId, campaignId },
       });
       if (existing) {
-        res.status(400).json({ message: "Você já possui um personagem" });
+        res.status(400).json({ message: "Você já possui um personagem nesta mesa" });
         return;
       }
     }
@@ -109,6 +111,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         history: history ?? "",
         notes: notes ?? "",
         ownerId: user.userId,
+        campaignId,
         dodgePresetId: dodgePresetId ?? null,
         blockPresetId: blockPresetId ?? null,
         counterAttackPresetId: counterAttackPresetId ?? null,
@@ -154,4 +157,4 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   res.status(405).end();
 }
 
-export default authenticate(handler);
+export default withCampaign(handler);
