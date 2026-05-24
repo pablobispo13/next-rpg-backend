@@ -33,7 +33,8 @@ async function handler(
     return;
   }
 
-  if (user.role !== "MESTRE" && character.ownerId !== user.userId) {
+  const { canActOnCharacter } = await import("../../../lib/campaignAccess");
+  if (!(await canActOnCharacter(user, character.id))) {
     res.status(403).json({ message: "Sem permissão" });
     return;
   }

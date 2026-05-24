@@ -51,7 +51,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     if (!target)
         return res.status(404).json({ message: "Alvo não encontrado" });
 
-    if (user.role !== "MESTRE" && target.ownerId !== user.userId)
+    const { canActOnCharacter } = await import("../../../lib/campaignAccess");
+    if (!(await canActOnCharacter(user, target.id)))
         return res.status(403).json({ message: "Não é seu personagem" });
 
     const attacker = await prisma.character.findUnique({

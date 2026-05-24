@@ -2,6 +2,7 @@ import type { NextApiResponse } from "next";
 import { authenticate, AuthenticatedRequest } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 import { RollResult } from "@prisma/client";
+import { getCampaignAccess } from "../../../lib/campaignAccess";
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     const { id } = req.query;
@@ -9,6 +10,21 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
     if (!id || typeof id !== "string") {
         res.status(400).json({ message: "id inválido" });
+        return;
+    }
+
+    // Valida que o usuário tem acesso à mesa dona deste combate
+    const owning = await prisma.combat.findUnique({
+        where: { id },
+        select: { campaignId: true },
+    });
+    if (!owning) {
+        res.status(404).json({ message: "Combate não encontrado" });
+        return;
+    }
+    const access = await getCampaignAccess(user, owning.campaignId);
+    if (!access) {
+        res.status(403).json({ message: "Sem acesso a esta mesa" });
         return;
     }
 

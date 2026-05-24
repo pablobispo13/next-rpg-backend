@@ -2,6 +2,7 @@ import { ReactNode } from "react";
 import { AppBar, Toolbar, Button, Box, Typography, Chip } from "@mui/material";
 import { useAuth } from "../context/AuthContext";
 import LogoutIcon from "@mui/icons-material/Logout";
+import CampaignSelector from "./Campaign/CampaignSelector";
 
 type LayoutProps = {
   children: ReactNode;
@@ -48,6 +49,7 @@ export default function Layout({ children }: LayoutProps) {
 
             {/* Right: role + name + logout */}
             <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+              <CampaignSelector />
               <Chip
                 label={user.role === "MESTRE" ? "🎲 Mestre" : "🧙 Jogador"}
                 size="small"

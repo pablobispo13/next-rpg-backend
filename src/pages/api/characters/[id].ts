@@ -30,7 +30,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     return;
   }
 
-  if (user.role !== "MESTRE" && character.ownerId !== user.userId) {
+  const { canActOnCharacter } = await import("../../../lib/campaignAccess");
+  if (!(await canActOnCharacter(user, character.id))) {
     res.status(403).json({ message: "Acesso negado" });
     return;
   }
@@ -131,6 +132,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         notes: source.notes,
         image: source.image,
         ownerId: source.ownerId,
+        campaignId: source.campaignId,
         dodgePresetId: null,
         blockPresetId: null,
         counterAttackPresetId: null,

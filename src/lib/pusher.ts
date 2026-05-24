@@ -22,11 +22,12 @@ export function getPusher(): Pusher | null {
     return _pusher;
 }
 
-export async function notifyCombatListUpdate(): Promise<void> {
+export async function notifyCombatListUpdate(campaignId?: string): Promise<void> {
     const pusher = getPusher();
     if (!pusher) return;
     try {
-        await pusher.trigger("combats", "updated", {});
+        const channel = campaignId ? `campaign-${campaignId}-combats` : "combats";
+        await pusher.trigger(channel, "updated", {});
     } catch (err) {
         if (process.env.NODE_ENV === "development") {
             console.error("[Pusher] Falha ao notificar lista de combates:", err);
@@ -34,11 +35,12 @@ export async function notifyCombatListUpdate(): Promise<void> {
     }
 }
 
-export async function notifyStreamUpdate(): Promise<void> {
+export async function notifyStreamUpdate(campaignId?: string): Promise<void> {
     const pusher = getPusher();
     if (!pusher) return;
     try {
-        await pusher.trigger("stream", "updated", {});
+        const channel = campaignId ? `campaign-${campaignId}-stream` : "stream";
+        await pusher.trigger(channel, "updated", {});
     } catch (err) {
         if (process.env.NODE_ENV === "development") {
             console.error("[Pusher] Falha ao notificar stream:", err);

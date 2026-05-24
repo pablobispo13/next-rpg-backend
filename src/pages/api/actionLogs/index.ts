@@ -1,6 +1,7 @@
 import { NextApiResponse } from "next";
 import { authenticate, AuthenticatedRequest } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
+import { canActOnCharacter } from "../../../lib/campaignAccess";
 
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
@@ -12,6 +13,11 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
         if (typeof characterId !== "string") {
             res.status(400).json({ message: "characterId é obrigatório" });
+            return;
+        }
+
+        if (!(await canActOnCharacter(user, characterId))) {
+            res.status(403).json({ message: "Sem acesso a este personagem" });
             return;
         }
 

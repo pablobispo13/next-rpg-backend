@@ -34,6 +34,8 @@ import { toast } from "react-toastify";
 import api from "../../lib/api";
 import { Character } from "../../types/types";
 import { useActiveCombats } from "../../lib/useActiveCombats";
+import { useCampaign } from "../../context/CampaignContext";
+import { isNpc } from "../../lib/isNpc";
 import { createCharacterTemplate } from "../../lib/characterTemplate";
 import CharacterCombatSelector from "../Character/CharacterCombatSelector";
 import { CombatProvider } from "../../context/CombatContext";
@@ -179,6 +181,8 @@ export default function MesaMestre() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
   const { combats, reload: reloadCombats } = useActiveCombats();
+  const { activeCampaign } = useCampaign();
+  const masterId = activeCampaign?.masterId ?? null;
 
   // Stream
   const [streamInput, setStreamInput] = useState("");
@@ -248,8 +252,8 @@ export default function MesaMestre() {
     localStorage.setItem("mesa_enemy_order", JSON.stringify(enemyOrder));
   }, [enemyOrder]);
 
-  const players = characters.filter((c) => c.owner?.role === "JOGADOR");
-  const enemies = characters.filter((c) => c.owner?.role === "MESTRE");
+  const players = characters.filter((c) => !isNpc(c, masterId));
+  const enemies = characters.filter((c) => isNpc(c, masterId));
 
   const sortedEnemies = [...enemies].sort((a, b) => {
     const ai = enemyOrder.indexOf(a.id);

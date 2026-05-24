@@ -1,5 +1,5 @@
 import type { NextApiResponse } from "next";
-import { authenticate, AuthenticatedRequest } from "../../../lib/auth";
+import { withCampaign, AuthenticatedRequest } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
 import { rollDice } from "../../../lib/dice";
 import { LogType } from "@prisma/client";
@@ -15,6 +15,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         return res.status(403).json({ message: "Apenas o mestre pode adicionar participantes" });
     }
 
+    const { campaignId } = req.campaign!;
     const { combatId, characterId } = req.body;
 
     if (!combatId || !characterId) {
@@ -26,7 +27,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         include: { participants: true },
     });
 
-    if (!combat) {
+    if (!combat || combat.campaignId !== campaignId) {
         return res.status(404).json({ message: "Combate ativo não encontrado" });
     }
 
@@ -36,8 +37,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     }
 
     const character = await prisma.character.findUnique({ where: { id: characterId } });
-    if (!character) {
-        return res.status(404).json({ message: "Personagem não encontrado" });
+    if (!character || character.campaignId !== campaignId) {
+        return res.status(404).json({ message: "Personagem não encontrado nesta mesa" });
     }
 
     const roll = rollDice("1d20");
@@ -76,4 +77,4 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     return res.status(201).json({ participant: newParticipant });
 }
 
-export default authenticate(handler);
+export default withCampaign(handler);

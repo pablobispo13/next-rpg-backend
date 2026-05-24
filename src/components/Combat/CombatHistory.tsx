@@ -23,6 +23,8 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { useEffect, useState } from "react";
 import api from "../../lib/api";
+import { useCampaign } from "../../context/CampaignContext";
+import { isNpc } from "../../lib/isNpc";
 
 /* ===========================
    TYPES
@@ -50,7 +52,7 @@ type Participant = {
         id: string;
         name: string;
         maxLife: number;
-        owner?: { role: string };
+        ownerId?: string;
     };
 };
 
@@ -110,14 +112,16 @@ function HpChart({
     participants,
     chartId,
     hideNpcs,
+    masterId,
 }: {
     snapshots: HpSnapshot[];
     participants: Participant[];
     chartId: string;
     hideNpcs: boolean;
+    masterId: string | null;
 }) {
     const visibleParticipants = hideNpcs
-        ? participants.filter((p) => p.character.owner?.role !== "MESTRE")
+        ? participants.filter((p) => !isNpc(p.character, masterId))
         : participants;
 
     if (!snapshots.length || !visibleParticipants.length) return null;
@@ -301,10 +305,12 @@ function CombatCard({
     combat,
     hideNpcs,
     onDelete,
+    masterId,
 }: {
     combat: CombatSummary;
     hideNpcs: boolean;
     onDelete: (id: string) => void;
+    masterId: string | null;
 }) {
     const [isOpen, setIsOpen] = useState(false);
     const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set());
@@ -312,11 +318,11 @@ function CombatCard({
     const [deleting, setDeleting] = useState(false);
 
     const visibleParticipants = hideNpcs
-        ? combat.participants.filter((p) => p.character.owner?.role !== "MESTRE")
+        ? combat.participants.filter((p) => !isNpc(p.character, masterId))
         : combat.participants;
 
     const hiddenNpcCount = hideNpcs
-        ? combat.participants.filter((p) => p.character.owner?.role === "MESTRE").length
+        ? combat.participants.filter((p) => isNpc(p.character, masterId)).length
         : 0;
 
     const logTypes = Array.from(new Set(combat.logs.map((l) => l.type)));
@@ -433,6 +439,7 @@ function CombatCard({
                                     participants={combat.participants}
                                     chartId={combat.id}
                                     hideNpcs={hideNpcs}
+                                    masterId={masterId}
                                 />
                             )}
 
@@ -537,6 +544,8 @@ export function CombatHistory() {
     const [combats, setCombats] = useState<CombatSummary[]>([]);
     const [loading, setLoading] = useState(true);
     const [hideNpcs, setHideNpcs] = useState(false);
+    const { activeCampaign } = useCampaign();
+    const masterId = activeCampaign?.masterId ?? null;
 
     useEffect(() => {
         api.get("/combat/history")
@@ -597,7 +606,7 @@ export function CombatHistory() {
             {/* Combat list */}
             <Stack spacing={1.5}>
                 {combats.map((combat) => (
-                    <CombatCard key={combat.id} combat={combat} hideNpcs={hideNpcs} onDelete={handleDelete} />
+                    <CombatCard key={combat.id} combat={combat} hideNpcs={hideNpcs} onDelete={handleDelete} masterId={masterId} />
                 ))}
             </Stack>
         </Stack>

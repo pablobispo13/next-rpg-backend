@@ -5,6 +5,7 @@ import { rollDice } from "../../lib/dice";
 import { LogType, EffectType, ActionType } from "@prisma/client";
 import { getAttributeValue } from "../../lib/attributes";
 import { notifyCombatUpdate } from "../../lib/pusher";
+import { canActOnCharacter } from "../../lib/campaignAccess";
 
 function joinNames(names: string[]): string {
     if (names.length === 1) return names[0];
@@ -29,6 +30,29 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     if (req.method === "GET") {
         const { combatId, characterId, limit = 20 } = req.query;
 
+        // Sem characterId nem combatId, exige mesa ativa para escopar
+        const headerCampaignId = req.headers["x-campaign-id"];
+        const campaignId = typeof headerCampaignId === "string" ? headerCampaignId : null;
+
+        if (!characterId && !combatId && !campaignId) {
+            return res.status(400).json({ message: "Informe characterId, combatId ou mesa ativa" });
+        }
+
+        if (characterId && !(await canActOnCharacter(req.user!, String(characterId)))) {
+            return res.status(403).json({ message: "Sem acesso a este personagem" });
+        }
+
+        // Se um combatId específico foi passado, valida que ele pertence à mesa do header (se fornecida)
+        if (combatId && combatId !== "none" && campaignId) {
+            const combat = await prisma.combat.findUnique({
+                where: { id: String(combatId) },
+                select: { campaignId: true },
+            });
+            if (!combat || combat.campaignId !== campaignId) {
+                return res.status(403).json({ message: "Combate não pertence à mesa ativa" });
+            }
+        }
+
         try {
             const rolls = await prisma.rollResult.findMany({
                 where: {
@@ -38,6 +62,10 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                             ? { combatId: String(combatId) }
                             : {}),
                     ...(characterId ? { characterId: String(characterId) } : {}),
+                    // Escopo final: garante que mesmo sem characterId/combatId, só venham rolls da mesa ativa
+                    ...(!characterId && !combatId && campaignId
+                        ? { character: { campaignId } }
+                        : {}),
                 },
                 include: {
                     character: {
@@ -105,7 +133,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     if (!character)
         return res.status(404).json({ message: "Personagem não encontrado" });
 
-    if (user.role !== "MESTRE" && character.ownerId !== user.userId)
+    if (!(await canActOnCharacter(user, character.id)))
         return res.status(403).json({ message: "Acesso negado" });
 
 

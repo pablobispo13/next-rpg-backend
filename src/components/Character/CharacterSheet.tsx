@@ -40,6 +40,8 @@ import { AttributeCard } from "../Jogador/AttributeCard";
 import { LifeBarCard } from "../Jogador/LifeBarCard";
 import { StreamPiP } from "../Stream/StreamPiP";
 import { useActiveStream } from "../../lib/useActiveStream";
+import { useCampaign } from "../../context/CampaignContext";
+import { isNpc } from "../../lib/isNpc";
 
 type Props = {
   characterLoaded: Character;
@@ -57,7 +59,10 @@ export function CharacterSheet({
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [editStatsOpen, setEditStatsOpen] = useState(false);
   const [presetOpen, setPresetOpen] = useState(false);
-  const canEdit = isMasterView || characterLoaded.owner?.role === "JOGADOR";
+  const { activeCampaign } = useCampaign();
+  const masterId = activeCampaign?.masterId ?? null;
+  // Edita se for visão do mestre, ou se o personagem não é um NPC (i.e., pertence a um jogador)
+  const canEdit = isMasterView || !isNpc(characterLoaded, masterId);
   const { combats } = useActiveCombats();
   const activeStreamUrl = useActiveStream();
   const [character, setCharacter] = useState<Character>(characterLoaded);
@@ -475,7 +480,7 @@ export function CharacterSheet({
 
             {/* Ações gerais */}
             <Stack direction="row" spacing={2} justifyContent="flex-end">
-              {character.owner?.role === "MESTRE" && (
+              {isNpc(character, masterId) && (
                 <Button variant="outlined" onClick={onClose}>
                   Fechar
                 </Button>

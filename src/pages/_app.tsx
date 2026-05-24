@@ -4,6 +4,7 @@ import { CssBaseline } from "@mui/material";
 import { ToastContainer } from "react-toastify";
 import { ThemeContext, ThemeContextProvider } from "../context/ThemeContext";
 import { AuthProvider } from "../context/AuthContext";
+import { CampaignProvider } from "../context/CampaignContext";
 import Layout from "../components/Layout";
 
 export default function MyApp({ Component, pageProps }: AppProps) {
@@ -13,15 +14,17 @@ export default function MyApp({ Component, pageProps }: AppProps) {
     return (
         <ThemeContextProvider>
             <AuthProvider>
-                <Layout>
-                    <CssBaseline />
-                    <Component {...pageProps} />
-                    <ToastContainer
-                        theme={mode}
-                        position="top-right"
-                        autoClose={6000}
-                    />
-                </Layout>
+                <CampaignProvider>
+                    <Layout>
+                        <CssBaseline />
+                        <Component {...pageProps} />
+                        <ToastContainer
+                            theme={mode}
+                            position="top-right"
+                            autoClose={6000}
+                        />
+                    </Layout>
+                </CampaignProvider>
             </AuthProvider>
         </ThemeContextProvider>
     );

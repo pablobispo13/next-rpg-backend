@@ -1,6 +1,7 @@
 import type { NextApiResponse } from "next";
 import { authenticate, AuthenticatedRequest } from "../../../lib/auth";
 import { prisma } from "../../../lib/prisma";
+import { canActOnCharacter } from "../../../lib/campaignAccess";
 
 type InventoryBody = {
     action: "list" | "add" | "update" | "delete";
@@ -29,7 +30,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         ? await prisma.character.findUnique({ where: { id: characterId } })
         : null;
 
-    if (character && user.role !== "MESTRE" && character.ownerId !== user.userId) {
+    if (character && !(await canActOnCharacter(user, character.id))) {
         return res.status(403).json({ message: "Acesso negado ao personagem" });
     }
 
@@ -68,8 +69,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             if (!existingItem) return res.status(404).json({ message: "Item não encontrado" });
 
             // valida acesso
-            const itemOwner = await prisma.character.findUnique({ where: { id: existingItem.characterId } });
-            if (user.role !== "MESTRE" && itemOwner?.ownerId !== user.userId) {
+            if (!(await canActOnCharacter(user, existingItem.characterId))) {
                 return res.status(403).json({ message: "Acesso negado ao item" });
             }
 
@@ -93,8 +93,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             const itemToDelete = await prisma.inventory.findUnique({ where: { id: itemId } });
             if (!itemToDelete) return res.status(404).json({ message: "Item não encontrado" });
 
-            const ownerCheck = await prisma.character.findUnique({ where: { id: itemToDelete.characterId } });
-            if (user.role !== "MESTRE" && ownerCheck?.ownerId !== user.userId) {
+            if (!(await canActOnCharacter(user, itemToDelete.characterId))) {
                 return res.status(403).json({ message: "Acesso negado ao item" });
             }
 

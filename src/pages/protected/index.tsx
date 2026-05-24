@@ -1,7 +1,8 @@
 "use client";
 
 import { useAuth } from "../../context/AuthContext";
-import { useSearchParams } from "next/navigation";
+import { useCampaign } from "../../context/CampaignContext";
+import { useRouter, useSearchParams } from "next/navigation";
 import Mestre from "./mestre";
 import Jogador from "./jogador";
 import { handleLogout } from "../../lib/api";
@@ -9,6 +10,8 @@ import { useEffect, useState } from "react";
 
 export default function Mesa() {
   const { user } = useAuth();
+  const { activeCampaign, loading: campaignLoading } = useCampaign();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const MAX_TENTATIVAS = 3;
   const INTERVALO_MS = 500;
@@ -30,17 +33,28 @@ export default function Mesa() {
     }, INTERVALO_MS);
 
     return () => clearTimeout(timer);
-  }, [user, tentativas, handleLogout]);
+  }, [user, tentativas]);
 
-  if (!user) {
+  // Sem mesa ativa: redireciona pra tela de seleção/criação
+  useEffect(() => {
+    if (!user || campaignLoading) return;
+    if (!activeCampaign) router.replace("/protected/mesas");
+  }, [user, campaignLoading, activeCampaign, router]);
+
+  if (!user || campaignLoading) {
     return <>Carregando...</>;
   }
-  
+  if (!activeCampaign) {
+    return <>Redirecionando para seleção de mesa…</>;
+  }
+
   const view = searchParams.get("view");
   const characterId = searchParams.get("characterId");
+  // key={activeCampaign.id} força re-mount ao trocar de mesa, recarregando todos os fetches
   if (user.role === "MESTRE" && view === "jogador") {
     return (
       <Jogador
+        key={activeCampaign.id}
         isSpectator
         forcedCharacterId={characterId}
       />
@@ -48,6 +62,6 @@ export default function Mesa() {
   }
 
   return user.role === "MESTRE"
-    ? <Mestre />
-    : <Jogador />;
+    ? <Mestre key={activeCampaign.id} />
+    : <Jogador key={activeCampaign.id} />;
 }
