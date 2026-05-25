@@ -155,36 +155,40 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         const resolvedTargetIds =
             targetIds.length ? targetIds : [character.id];
 
-        const roll = await prisma.rollResult.create({
-            data: {
-                characterId: character.id,
-                presetId: null,
-                combatId: combatId ?? null,
-                turnId: turnId ?? null,
-                targetIds: resolvedTargetIds,
-                diceRolled: diceFormula,
-                rolls: dice.rolls,
-                modifier: 0,
-                total: dice.total,
-                critical: false,
-                success: null,
-                pendingReaction: false,
-                reacted: false,
-                reactionType: null,
-            },
-        });
+        const roll = await prisma.$transaction(async (tx) => {
+            const created = await tx.rollResult.create({
+                data: {
+                    characterId: character.id,
+                    presetId: null,
+                    combatId: combatId ?? null,
+                    turnId: turnId ?? null,
+                    targetIds: resolvedTargetIds,
+                    diceRolled: diceFormula,
+                    rolls: dice.rolls,
+                    modifier: 0,
+                    total: dice.total,
+                    critical: false,
+                    success: null,
+                    pendingReaction: false,
+                    reacted: false,
+                    reactionType: null,
+                },
+            });
 
-        await prisma.actionLog.create({
-            data: {
-                type: LogType.ROLL,
-                message:
-                    logMessage ??
-                    `${character.name} rolou ${diceFormula} (${dice.rolls.join(", ")}) = ${dice.total}`,
-                characterId: character.id,
-                rollId: roll.id,
-                combatId: combatId ?? null,
-                turnId: turnId ?? null,
-            },
+            await tx.actionLog.create({
+                data: {
+                    type: LogType.ROLL,
+                    message:
+                        logMessage ??
+                        `${character.name} rolou ${diceFormula} (${dice.rolls.join(", ")}) = ${dice.total}`,
+                    characterId: character.id,
+                    rollId: created.id,
+                    combatId: combatId ?? null,
+                    turnId: turnId ?? null,
+                },
+            });
+
+            return created;
         });
 
         return res.status(201).json({ roll });
@@ -236,35 +240,11 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             : targetIds;
 
 
-    const roll = await prisma.rollResult.create({
-        data: {
-            characterId: character.id,
-            presetId: preset.id,
-            combatId: combatId ?? null,
-            turnId: turnId ?? null,
-            targetIds: resolvedTargetIds,
-            diceRolled: preset.diceFormula,
-            rolls: attackRoll.rolls,
-            modifier: effectiveAttribute + flatModifier,
-            total: attackTotal,
-            critical: isCritical,
-            success: null,
-            pendingReaction: false,
-            reacted: false,
-            reactionType: null,
-        },
-    });
-
-
     /* =====================================================
-       RESOLUÇÃO POR ALVO
+       RESOLUÇÃO POR ALVO — TODA EM UMA TRANSAÇÃO
+       Garante que: se algo falhar no meio, nenhum log/HP/efeito é persistido.
+       Cálculos puros (dados rolados, totais) acontecem antes para acelerar a tx.
     ===================================================== */
-
-    const pendingReactionTargets: Array<{ targetId: string; status: "PENDING" }> = [];
-    const hitNames:          string[] = [];
-    const missNames:         string[] = [];
-    const directDamageNames: string[] = [];
-    const directHealNames:   string[] = [];
 
     // Dano é rolado UMA vez e aplicado a todos os alvos
     let impactTotal: number | null = null;
@@ -274,288 +254,283 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         const impactRoll = rollDice(preset.impactFormula);
         impactRolls = impactRoll.rolls;
         impactTotal = impactRoll.total + effectiveAttribute;
-
         if (isCritical && preset.critMultiplier) {
             impactTotal = Math.floor(impactTotal * preset.critMultiplier);
         }
     }
 
-    for (const targetId of resolvedTargetIds) {
+    // Pré-carrega todos os targets pra evitar findUnique dentro da transação
+    const targetsLoaded = await prisma.character.findMany({
+        where: { id: { in: resolvedTargetIds } },
+    });
+    const targetsById = new Map(targetsLoaded.map((t) => [t.id, t]));
 
-        const target = await prisma.character.findUnique({
-            where: { id: targetId }
+    const participantsLoaded = combatId
+        ? await prisma.combatParticipant.findMany({
+            where: { combatId, characterId: { in: resolvedTargetIds } },
+        })
+        : [];
+    const participantByCharId = new Map(participantsLoaded.map((p) => [p.characterId, p]));
+
+    const roll = await prisma.$transaction(async (tx) => {
+        const created = await tx.rollResult.create({
+            data: {
+                characterId: character.id,
+                presetId: preset.id,
+                combatId: combatId ?? null,
+                turnId: turnId ?? null,
+                targetIds: resolvedTargetIds,
+                diceRolled: preset.diceFormula,
+                rolls: attackRoll.rolls,
+                modifier: effectiveAttribute + flatModifier,
+                total: attackTotal,
+                critical: isCritical,
+                success: null,
+                pendingReaction: false,
+                reacted: false,
+                reactionType: null,
+            },
         });
 
-        if (!target) continue;
+        const pendingReactionTargets: Array<{ targetId: string; status: "PENDING" }> = [];
+        const hitNames: string[] = [];
+        const missNames: string[] = [];
+        const directDamageNames: string[] = [];
+        const directHealNames: string[] = [];
 
-        let passedBaseDefense = true;
+        for (const targetId of resolvedTargetIds) {
+            const target = targetsById.get(targetId);
+            if (!target) continue;
 
-        if (preset.type === ActionType.ATTACK) {
-            passedBaseDefense =
-                attackTotal >= (target.baseDefense ?? 0);
-        }
-
-        // Busca CombatParticipant para aplicar dano/cura
-        let combatParticipant = null;
-        let beforeLife = target.life;
-
-        if (combatId) {
-            combatParticipant = await prisma.combatParticipant.findFirst({
-                where: {
-                    combatId,
-                    characterId: targetId,
-                },
-            });
-
-            if (combatParticipant) {
-                beforeLife = combatParticipant.currentLife;
+            let passedBaseDefense = true;
+            if (preset.type === ActionType.ATTACK) {
+                passedBaseDefense = attackTotal >= (target.baseDefense ?? 0);
             }
-        }
 
-        if (!passedBaseDefense) {
+            const combatParticipant = participantByCharId.get(targetId) ?? null;
+            const beforeLife = combatParticipant ? combatParticipant.currentLife : target.life;
 
-            await prisma.rollResultDetail.create({
+            if (!passedBaseDefense) {
+                await tx.rollResultDetail.create({
+                    data: {
+                        rollResultId: created.id,
+                        targetId,
+                        beforeLife,
+                        succeeded: false,
+                        critical: false,
+                        targetDefense: target.baseDefense ?? 0,
+                    },
+                });
+                missNames.push(target.name);
+                continue;
+            }
+
+            const shouldOpenReaction =
+                preset.type === ActionType.ATTACK &&
+                !!(target.dodgePresetId || target.blockPresetId || target.counterAttackPresetId);
+
+            const isHealType = preset.type === ActionType.HEAL || preset.type === ActionType.SUPPORT;
+            let afterLife = beforeLife;
+
+            if (impactTotal) {
+                if (combatParticipant) {
+                    if (preset.type === ActionType.ATTACK && !shouldOpenReaction) {
+                        const currentTempHp = combatParticipant.tempHp ?? 0;
+                        let remainingDamage = impactTotal;
+                        let newTempHp = currentTempHp;
+
+                        if (currentTempHp > 0) {
+                            const absorbed = Math.min(currentTempHp, remainingDamage);
+                            remainingDamage -= absorbed;
+                            newTempHp = currentTempHp - absorbed;
+                            await tx.actionLog.create({
+                                data: {
+                                    type: LogType.MANUAL_OVERRIDE,
+                                    message: `${target.name} absorveu ${absorbed} de dano com HP temporário`,
+                                    characterId: character.id,
+                                    targetId,
+                                    rollId: created.id,
+                                    combatId: combatId ?? null,
+                                    turnId: turnId ?? null,
+                                },
+                            });
+                        }
+
+                        afterLife = Math.max(0, beforeLife - remainingDamage);
+                        await tx.combatParticipant.update({
+                            where: { id: combatParticipant.id },
+                            data: { currentLife: afterLife, tempHp: newTempHp },
+                        });
+                    } else if (isHealType) {
+                        afterLife = Math.min(target.maxLife, beforeLife + impactTotal);
+                        await tx.combatParticipant.update({
+                            where: { id: combatParticipant.id },
+                            data: { currentLife: afterLife },
+                        });
+                    }
+                } else {
+                    if (preset.type === ActionType.ATTACK) {
+                        afterLife = Math.max(0, target.life - impactTotal);
+                        await tx.character.update({
+                            where: { id: targetId },
+                            data: { life: afterLife },
+                        });
+                    } else if (isHealType) {
+                        afterLife = Math.min(target.maxLife, target.life + impactTotal);
+                        await tx.character.update({
+                            where: { id: targetId },
+                            data: { life: afterLife },
+                        });
+                    }
+                }
+            }
+
+            await tx.rollResultDetail.create({
                 data: {
-                    rollResultId: roll.id,
+                    rollResultId: created.id,
                     targetId,
                     beforeLife,
-                    succeeded: false,
-                    critical: false,
+                    succeeded: true,
+                    critical: isCritical,
+                    damageApplied: preset.type === ActionType.ATTACK ? impactTotal : null,
+                    healingApplied: isHealType ? impactTotal : null,
                     targetDefense: target.baseDefense ?? 0,
                 },
             });
 
-            missNames.push(target.name);
-            continue;
-        }
+            if (shouldOpenReaction) {
+                pendingReactionTargets.push({ targetId, status: "PENDING" });
+            }
 
-        const shouldOpenReaction =
-            preset.type === ActionType.ATTACK &&
-            !!(
-                target.dodgePresetId ||
-                target.blockPresetId ||
-                target.counterAttackPresetId
-            );
+            await tx.rollResult.update({
+                where: { id: created.id },
+                data: {
+                    success: true,
+                    pendingReaction: shouldOpenReaction,
+                    impactRolls: impactRolls.length > 0 ? impactRolls : undefined,
+                    damage: preset.type === ActionType.ATTACK ? impactTotal : null,
+                    healing: isHealType ? impactTotal : null,
+                },
+            });
 
-        // Aplica dano/cura automático em combate
-        let afterLife = beforeLife;
+            hitNames.push(target.name);
+            if (impactTotal && impactTotal > 0 && !shouldOpenReaction) {
+                if (preset.type === ActionType.ATTACK) directDamageNames.push(target.name);
+                else if (isHealType) directHealNames.push(target.name);
+            }
 
-        const isHealType = preset.type === ActionType.HEAL || preset.type === ActionType.SUPPORT;
+            if (preset.appliesEffect) {
+                const effectType: EffectType = preset.effectType ?? (
+                    preset.type === ActionType.ATTACK ? EffectType.DAMAGE_OVER_TIME : EffectType.HEAL_OVER_TIME
+                );
 
-        if (impactTotal) {
-            if (combatParticipant) {
-                // Em combate: atualiza HP do participante
-                if (preset.type === ActionType.ATTACK && !shouldOpenReaction) {
-                    const currentTempHp = combatParticipant.tempHp ?? 0;
-                    let remainingDamage = impactTotal;
-                    let newTempHp = currentTempHp;
-
-                    if (currentTempHp > 0) {
-                        const absorbed = Math.min(currentTempHp, remainingDamage);
-                        remainingDamage -= absorbed;
-                        newTempHp = currentTempHp - absorbed;
-                        await prisma.actionLog.create({
+                if (effectType === EffectType.TEMP_HP) {
+                    const amount = preset.effectAmount ?? 0;
+                    if (amount > 0 && combatParticipant) {
+                        const currentTempHp = combatParticipant.tempHp ?? 0;
+                        await tx.combatParticipant.update({
+                            where: { id: combatParticipant.id },
+                            data: { tempHp: currentTempHp + amount },
+                        });
+                        await tx.actionLog.create({
                             data: {
                                 type: LogType.MANUAL_OVERRIDE,
-                                message: `${target.name} absorveu ${absorbed} de dano com HP temporário`,
+                                message: `${target.name} ganhou ${amount} de HP temporário por ${preset.name}`,
                                 characterId: character.id,
                                 targetId,
-                                rollId: roll.id,
+                                rollId: created.id,
                                 combatId: combatId ?? null,
                                 turnId: turnId ?? null,
                             },
                         });
                     }
-
-                    afterLife = Math.max(0, beforeLife - remainingDamage);
-                    await prisma.combatParticipant.update({
-                        where: { id: combatParticipant.id },
-                        data: { currentLife: afterLife, tempHp: newTempHp },
+                } else if (preset.durationTurns && preset.durationTurns > 0) {
+                    const effectNeedsStat = effectType === "STAT_BUFF" || effectType === "STAT_DEBUFF";
+                    const effectNeedsValue = ["STAT_BUFF", "STAT_DEBUFF", "ROLL_BONUS", "ROLL_PENALTY",
+                        "HEAL_OVER_TIME", "DAMAGE_OVER_TIME"].includes(effectType);
+                    await tx.characterEffect.create({
+                        data: {
+                            characterId: target.id,
+                            presetId: preset.id,
+                            remainingTurns: preset.durationTurns,
+                            type: effectType,
+                            statAffected: effectNeedsStat ? (preset.statAffected ?? null) : null,
+                            value: effectNeedsValue ? (preset.effectAmount ?? 0) : 0,
+                        },
                     });
-                } else if (isHealType) {
-                    afterLife = Math.min(target.maxLife, beforeLife + impactTotal);
-                    await prisma.combatParticipant.update({
-                        where: { id: combatParticipant.id },
-                        data: { currentLife: afterLife },
-                    });
-                }
-            } else {
-                // Fora de combate: atualiza diretamente character.life
-                if (preset.type === ActionType.ATTACK) {
-                    afterLife = Math.max(0, target.life - impactTotal);
-                    await prisma.character.update({
-                        where: { id: targetId },
-                        data: { life: afterLife },
-                    });
-                } else if (isHealType) {
-                    afterLife = Math.min(target.maxLife, target.life + impactTotal);
-                    await prisma.character.update({
-                        where: { id: targetId },
-                        data: { life: afterLife },
-                    });
-                }
-            }
-        }
-
-        // Cria RollResultDetail para sucesso
-        await prisma.rollResultDetail.create({
-            data: {
-                rollResultId: roll.id,
-                targetId,
-                beforeLife,
-                succeeded: true,
-                critical: isCritical,
-                damageApplied:
-                    preset.type === ActionType.ATTACK ? impactTotal : null,
-                healingApplied:
-                    isHealType ? impactTotal : null,
-                targetDefense: target.baseDefense ?? 0,
-            },
-        });
-
-        if (shouldOpenReaction) {
-            pendingReactionTargets.push({ targetId, status: "PENDING" });
-        }
-
-        await prisma.rollResult.update({
-            where: { id: roll.id },
-            data: {
-                success: true,
-                pendingReaction: shouldOpenReaction,
-                impactRolls: impactRolls.length > 0 ? impactRolls : undefined,
-                damage:
-                    preset.type === ActionType.ATTACK
-                        ? impactTotal
-                        : null,
-                healing:
-                    isHealType
-                        ? impactTotal
-                        : null,
-            },
-        });
-
-        hitNames.push(target.name);
-        if (impactTotal && impactTotal > 0 && !shouldOpenReaction) {
-            if (preset.type === ActionType.ATTACK) directDamageNames.push(target.name);
-            else if (isHealType) directHealNames.push(target.name);
-        }
-
-        if (preset.appliesEffect) {
-            const effectType: EffectType = preset.effectType ?? (
-                preset.type === ActionType.ATTACK ? EffectType.DAMAGE_OVER_TIME : EffectType.HEAL_OVER_TIME
-            );
-
-            if (effectType === EffectType.TEMP_HP) {
-                // Immediate: add to participant's temp HP pool
-                const amount = preset.effectAmount ?? 0;
-                if (amount > 0 && combatParticipant) {
-                    const currentTempHp = combatParticipant.tempHp ?? 0;
-                    await prisma.combatParticipant.update({
-                        where: { id: combatParticipant.id },
-                        data: { tempHp: currentTempHp + amount },
-                    });
-                    await prisma.actionLog.create({
+                    await tx.actionLog.create({
                         data: {
                             type: LogType.MANUAL_OVERRIDE,
-                            message: `${target.name} ganhou ${amount} de HP temporário por ${preset.name}`,
+                            message: `${target.name} recebeu efeito ${preset.name} por ${preset.durationTurns} turnos`,
                             characterId: character.id,
                             targetId,
-                            rollId: roll.id,
+                            rollId: created.id,
                             combatId: combatId ?? null,
                             turnId: turnId ?? null,
                         },
                     });
                 }
-            } else if (preset.durationTurns && preset.durationTurns > 0) {
-                // Timed effect: create CharacterEffect record
-                const effectNeedsStat  = effectType === "STAT_BUFF" || effectType === "STAT_DEBUFF";
-                const effectNeedsValue = ["STAT_BUFF", "STAT_DEBUFF", "ROLL_BONUS", "ROLL_PENALTY",
-                                          "HEAL_OVER_TIME", "DAMAGE_OVER_TIME"].includes(effectType);
-                await prisma.characterEffect.create({
-                    data: {
-                        characterId: target.id,
-                        presetId: preset.id,
-                        remainingTurns: preset.durationTurns,
-                        type: effectType,
-                        statAffected: effectNeedsStat ? (preset.statAffected ?? null) : null,
-                        value: effectNeedsValue ? (preset.effectAmount ?? 0) : 0,
-                    },
-                });
-                await prisma.actionLog.create({
-                    data: {
-                        type: LogType.MANUAL_OVERRIDE,
-                        message: `${target.name} recebeu efeito ${preset.name} por ${preset.durationTurns} turnos`,
-                        characterId: character.id,
-                        targetId,
-                        rollId: roll.id,
-                        combatId: combatId ?? null,
-                        turnId: turnId ?? null,
-                    },
-                });
             }
         }
-    }
 
-    // Corrige success para o caso de todos errarem (nenhum hit path rodou)
-    if (hitNames.length === 0 && missNames.length > 0) {
-        await prisma.rollResult.update({ where: { id: roll.id }, data: { success: false } });
-    }
+        if (hitNames.length === 0 && missNames.length > 0) {
+            await tx.rollResult.update({ where: { id: created.id }, data: { success: false } });
+        }
 
-    // Log único de ataque/ação consolidando todos os alvos
-    await prisma.actionLog.create({
-        data: {
-            type: LogType.ROLL,
-            message: buildRollLog(character.name, preset.name, preset.type as string, hitNames, missNames),
-            characterId: character.id,
-            rollId: roll.id,
-            combatId: combatId ?? null,
-            turnId: turnId ?? null,
-        },
-    });
-
-    // Log de dano direto (sem reação pendente)
-    if (directDamageNames.length > 0 && impactTotal && impactTotal > 0) {
-        await prisma.actionLog.create({
+        await tx.actionLog.create({
             data: {
-                type: LogType.DAMAGE,
-                message: directDamageNames.length === 1
-                    ? `${directDamageNames[0]} recebeu ${impactTotal} de dano`
-                    : `${joinNames(directDamageNames)} receberam ${impactTotal} de dano`,
+                type: LogType.ROLL,
+                message: buildRollLog(character.name, preset.name, preset.type as string, hitNames, missNames),
                 characterId: character.id,
-                rollId: roll.id,
+                rollId: created.id,
                 combatId: combatId ?? null,
                 turnId: turnId ?? null,
             },
         });
-    }
 
-    // Log de cura direta
-    if (directHealNames.length > 0 && impactTotal && impactTotal > 0) {
-        await prisma.actionLog.create({
-            data: {
-                type: LogType.HEAL,
-                message: directHealNames.length === 1
-                    ? `${directHealNames[0]} foi curado em ${impactTotal} por ${preset.name}`
-                    : `${joinNames(directHealNames)} foram curados em ${impactTotal} por ${preset.name}`,
-                characterId: character.id,
-                rollId: roll.id,
-                combatId: combatId ?? null,
-                turnId: turnId ?? null,
-            },
-        });
-    }
+        if (directDamageNames.length > 0 && impactTotal && impactTotal > 0) {
+            await tx.actionLog.create({
+                data: {
+                    type: LogType.DAMAGE,
+                    message: directDamageNames.length === 1
+                        ? `${directDamageNames[0]} recebeu ${impactTotal} de dano`
+                        : `${joinNames(directDamageNames)} receberam ${impactTotal} de dano`,
+                    characterId: character.id,
+                    rollId: created.id,
+                    combatId: combatId ?? null,
+                    turnId: turnId ?? null,
+                },
+            });
+        }
 
-    // Atualiza roll com todos os alvos pendentes de reação
-    if (pendingReactionTargets.length > 0) {
-        await prisma.rollResult.update({
-            where: { id: roll.id },
-            data: {
-                pendingReactionTargets: pendingReactionTargets as any,
-            },
-        });
-    }
+        if (directHealNames.length > 0 && impactTotal && impactTotal > 0) {
+            await tx.actionLog.create({
+                data: {
+                    type: LogType.HEAL,
+                    message: directHealNames.length === 1
+                        ? `${directHealNames[0]} foi curado em ${impactTotal} por ${preset.name}`
+                        : `${joinNames(directHealNames)} foram curados em ${impactTotal} por ${preset.name}`,
+                    characterId: character.id,
+                    rollId: created.id,
+                    combatId: combatId ?? null,
+                    turnId: turnId ?? null,
+                },
+            });
+        }
 
-    if (combatId) notifyCombatUpdate(combatId); // fire-and-forget
+        if (pendingReactionTargets.length > 0) {
+            await tx.rollResult.update({
+                where: { id: created.id },
+                data: {
+                    pendingReactionTargets: pendingReactionTargets as any,
+                },
+            });
+        }
+
+        return created;
+    }, { timeout: 15000 });
+
+    if (combatId) notifyCombatUpdate(combatId); // fire-and-forget, fora da transação
     return res.status(201).json({ roll });
 }
 

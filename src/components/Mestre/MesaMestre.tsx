@@ -22,6 +22,7 @@ import {
   DialogContent,
   DialogActions,
   Divider,
+  MenuItem,
 } from "@mui/material";
 import LiveTvIcon from "@mui/icons-material/LiveTv";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
@@ -36,7 +37,7 @@ import { Character } from "../../types/types";
 import { useActiveCombats } from "../../lib/useActiveCombats";
 import { useCampaign } from "../../context/CampaignContext";
 import { isNpc } from "../../lib/isNpc";
-import { createCharacterTemplate } from "../../lib/characterTemplate";
+import { createCharacterTemplate, Archetype, ARCHETYPE_LABELS } from "../../lib/characterTemplate";
 import CharacterCombatSelector from "../Character/CharacterCombatSelector";
 import { CombatProvider } from "../../context/CombatContext";
 import { CharacterRow } from "../Character/CharacterRow";
@@ -48,6 +49,14 @@ import Head from "next/head";
    NEW ENEMY DIALOG
 ========================= */
 
+const ARCHETYPE_DESCRIPTIONS: Record<Archetype, string> = {
+  PLAYER: "Atributos médios (10), 30 HP. Esquiva + bloqueio + contra-ataque (1d6).",
+  ENEMY: "Atributos baixos (8), 20 HP. Apenas esquiva.",
+  BOSS: "Atributos altos (12-15), 80 HP. Todas as reações, contra-ataque 2d6.",
+  MINION: "Atributos mínimos, 8 HP. Sem reações — pra hordas descartáveis.",
+  NPC: "Atributos baixos, 10 HP. Sem reações — coadjuvante de cena.",
+};
+
 function NewEnemyDialog({
   open,
   onClose,
@@ -58,26 +67,29 @@ function NewEnemyDialog({
   onCreated: () => void;
 }) {
   const [name, setName] = useState("");
+  const [archetype, setArchetype] = useState<Archetype>("ENEMY");
   const [creating, setCreating] = useState(false);
 
   function handleClose() {
     if (!creating) {
       setName("");
+      setArchetype("ENEMY");
       onClose();
     }
   }
 
   async function handleCreate() {
-    const trimmed = name.trim() || "Novo Inimigo";
+    const trimmed = name.trim() || ARCHETYPE_LABELS[archetype];
     setCreating(true);
     try {
-      await createCharacterTemplate(trimmed);
-      toast.success(`"${trimmed}" criado com ações padrão`);
+      await createCharacterTemplate(trimmed, archetype);
+      toast.success(`"${trimmed}" criado`);
       setName("");
+      setArchetype("ENEMY");
       onCreated();
       onClose();
     } catch {
-      toast.error("Erro ao criar personagem");
+      // toast tratado pelo interceptor
     } finally {
       setCreating(false);
     }
@@ -85,23 +97,35 @@ function NewEnemyDialog({
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="xs" fullWidth>
-      <DialogTitle sx={{ pb: 1 }}>Novo inimigo / NPC</DialogTitle>
+      <DialogTitle sx={{ pb: 1 }}>Novo personagem (mestre)</DialogTitle>
       <DialogContent>
         <Stack spacing={2} mt={0.5}>
           <TextField
-            label="Nome do personagem"
-            placeholder="ex: Goblin Guerreiro"
+            select
+            label="Arquétipo"
+            value={archetype}
+            onChange={(e) => setArchetype(e.target.value as Archetype)}
+            fullWidth
+            size="small"
+            disabled={creating}
+          >
+            {(Object.keys(ARCHETYPE_LABELS) as Archetype[]).map((a) => (
+              <MenuItem key={a} value={a}>{ARCHETYPE_LABELS[a]}</MenuItem>
+            ))}
+          </TextField>
+          <Typography fontSize={11} color="#888" sx={{ mt: -1, mb: 0 }}>
+            {ARCHETYPE_DESCRIPTIONS[archetype]}
+          </Typography>
+          <TextField
+            label="Nome"
+            placeholder={`ex: Goblin Guerreiro (default: ${ARCHETYPE_LABELS[archetype]})`}
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleCreate()}
             fullWidth
-            autoFocus
             size="small"
+            disabled={creating}
           />
-          <Typography fontSize={12} color="#666">
-            Criado com atributos zerados e ações padrão (esquiva, bloqueio, contra-ataque e testes de atributo).
-            Edite a ficha depois para personalizar.
-          </Typography>
         </Stack>
       </DialogContent>
       <DialogActions>

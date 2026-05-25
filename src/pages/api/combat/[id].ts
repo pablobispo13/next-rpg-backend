@@ -79,16 +79,24 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
             return;
         }
 
-        const rollResultIds = (
-            await prisma.rollResult.findMany({ where: { combatId: id }, select: { id: true } })
-        ).map((r) => r.id);
+        await prisma.$transaction(async (tx) => {
+            const rolls = await tx.rollResult.findMany({
+                where: { combatId: id },
+                select: { id: true },
+            });
+            const rollIds = rolls.map((r) => r.id);
 
-        await prisma.rollResultDetail.deleteMany({ where: { rollResultId: { in: rollResultIds } } });
-        await prisma.actionLog.deleteMany({ where: { combatId: id } });
-        await prisma.rollResult.deleteMany({ where: { combatId: id } });
-        await prisma.combatTurn.deleteMany({ where: { combatId: id } });
-        await prisma.combatParticipant.deleteMany({ where: { combatId: id } });
-        await prisma.combat.delete({ where: { id } });
+            if (rollIds.length > 0) {
+                await tx.rollResultDetail.deleteMany({
+                    where: { rollResultId: { in: rollIds } },
+                });
+            }
+            await tx.actionLog.deleteMany({ where: { combatId: id } });
+            await tx.rollResult.deleteMany({ where: { combatId: id } });
+            await tx.combatTurn.deleteMany({ where: { combatId: id } });
+            await tx.combatParticipant.deleteMany({ where: { combatId: id } });
+            await tx.combat.delete({ where: { id } });
+        });
 
         res.status(200).json({ message: "Combate deletado com sucesso" });
         return;

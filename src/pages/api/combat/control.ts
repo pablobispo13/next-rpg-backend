@@ -43,62 +43,61 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
                 return;
             }
 
-            const newCombat = await prisma.combat.create({
-                data: { active: true, campaignId },
-                include: {
-                    participants: true,
-                    turns: true,
-                    logs: true,
-                    rollResults: true,
-                }
-            });
-
-            const participants = await Promise.all(
-                charsInCampaign.map((char) =>
-                    prisma.combatParticipant.create({
-                        data: { combatId: newCombat.id, characterId: char.id, currentLife: char.life },
-                        include: { character: true }
-                    })
-                )
-            );
-
-            const participantsWithInitiative = await Promise.all(
-                participants.map(async (p) => {
-                    const char = await prisma.character.findUnique({ where: { id: p.characterId } });
+            // Rolagem de iniciativa é determinada antes da transação (lado puramente computacional).
+            // Desempate por Agilidade quando iniciativa for igual.
+            const rolled = charsInCampaign
+                .map((char) => {
                     const roll = rollDice("1d20");
-                    const initiative = roll.total + (char?.agility ?? 0);
-                    return { id: p.id, characterId: p.characterId, initiative, agility: char?.agility ?? 0 };
+                    return {
+                        characterId: char.id,
+                        life: char.life,
+                        agility: char.agility,
+                        initiative: roll.total + char.agility,
+                    };
                 })
-            );
+                .sort((a, b) => b.initiative - a.initiative || b.agility - a.agility);
 
-            // Desempate por Agilidade quando iniciativa for igual
-            participantsWithInitiative.sort((a, b) => b.initiative - a.initiative || b.agility - a.agility);
+            const { combatId: newCombatId, order } = await prisma.$transaction(async (tx) => {
+                const created = await tx.combat.create({ data: { active: true, campaignId } });
 
-            await Promise.all(
-                participantsWithInitiative.map((p, index) =>
-                    prisma.combatParticipant.update({
-                        where: { id: p.id },
-                        data: { turnOrder: index, initiative: p.initiative }
-                    })
-                )
-            );
+                const participants = await Promise.all(
+                    rolled.map((r, index) =>
+                        tx.combatParticipant.create({
+                            data: {
+                                combatId: created.id,
+                                characterId: r.characterId,
+                                currentLife: r.life,
+                                turnOrder: index,
+                                initiative: r.initiative,
+                            },
+                        }).then((p) => ({
+                            id: p.id,
+                            characterId: r.characterId,
+                            initiative: r.initiative,
+                            agility: r.agility,
+                        }))
+                    )
+                );
 
-            await prisma.actionLog.create({
-                data: { type: LogType.COMBAT_START, message: "Combate iniciado", combatId: newCombat.id }
-            });
+                await tx.actionLog.create({
+                    data: { type: LogType.COMBAT_START, message: "Combate iniciado", combatId: created.id },
+                });
+
+                return { combatId: created.id, order: participants };
+            }, { timeout: 15000 });
 
             const combatFull = await prisma.combat.findUnique({
-                where: { id: newCombat.id },
+                where: { id: newCombatId },
                 include: {
                     participants: { include: { character: true } },
                     turns: true,
                     logs: true,
                     rollResults: true,
-                }
+                },
             });
-            notifyCombatUpdate(newCombat.id);
+            notifyCombatUpdate(newCombatId);
             notifyCombatListUpdate(campaignId);
-            res.status(201).json({ combat: combatFull, order: participantsWithInitiative });
+            res.status(201).json({ combat: combatFull, order });
             return;
         }
 
@@ -391,33 +390,39 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         case "endCombat": {
             if (!combatId) return res.status(400).json({ message: "Dados insuficientes" });
 
-            // Sync final HP from CombatParticipant back to Character before closing
-            const finalParticipants = await prisma.combatParticipant.findMany({
-                where: { combatId },
-            });
-            await Promise.all(
-                finalParticipants.map((p) =>
-                    prisma.character.update({
-                        where: { id: p.characterId },
-                        data: { life: p.currentLife },
-                    })
-                )
-            );
+            // Sync de HP de volta pros characters, limpeza de efeitos e fechamento — tudo atômico
+            await prisma.$transaction(async (tx) => {
+                const finalParticipants = await tx.combatParticipant.findMany({
+                    where: { combatId },
+                });
 
-            // Remove all active effects and temp HP from all participants
-            const participantCharacterIds = finalParticipants.map((p) => p.characterId);
-            await prisma.characterEffect.deleteMany({
-                where: { characterId: { in: participantCharacterIds } },
-            });
-            await prisma.combatParticipant.updateMany({
-                where: { combatId },
-                data: { tempHp: 0 },
-            });
+                await Promise.all(
+                    finalParticipants.map((p) =>
+                        tx.character.update({
+                            where: { id: p.characterId },
+                            data: { life: p.currentLife },
+                        })
+                    )
+                );
 
-            await prisma.combat.update({ where: { id: combatId }, data: { active: false } });
-            await prisma.actionLog.create({ data: { type: LogType.COMBAT_END, message: "Combate finalizado", combatId } });
+                const participantCharacterIds = finalParticipants.map((p) => p.characterId);
+                if (participantCharacterIds.length > 0) {
+                    await tx.characterEffect.deleteMany({
+                        where: { characterId: { in: participantCharacterIds } },
+                    });
+                }
+                await tx.combatParticipant.updateMany({
+                    where: { combatId },
+                    data: { tempHp: 0 },
+                });
 
-            // Compute combat statistics
+                await tx.combat.update({ where: { id: combatId }, data: { active: false } });
+                await tx.actionLog.create({
+                    data: { type: LogType.COMBAT_END, message: "Combate finalizado", combatId },
+                });
+            }, { timeout: 15000 });
+
+            // Estatísticas fora da transação (somente leitura, sem impacto se falhar)
             const rollResults = await prisma.rollResult.findMany({
                 where: { combatId },
                 include: { character: { select: { id: true, name: true } } }

@@ -122,66 +122,68 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       return;
     }
 
-    const cloned = await prisma.character.create({
-      data: {
-        name: `Cópia de ${source.name}`,
-        life: source.life,
-        maxLife: source.maxLife,
-        xp: source.xp,
-        strength: source.strength,
-        agility: source.agility,
-        vigor: source.vigor,
-        intellect: source.intellect,
-        presence: source.presence,
-        baseDefense: source.baseDefense,
-        history: source.history,
-        notes: source.notes,
-        image: source.image,
-        ownerId: source.ownerId,
-        campaignId: source.campaignId,
-        dodgePresetId: null,
-        blockPresetId: null,
-        counterAttackPresetId: null,
-      },
-    });
-
-    // Clone action presets and map old IDs → new IDs
-    const presetIdMap: Record<string, string> = {};
-    for (const p of source.presets) {
-      const newPreset = await prisma.actionPreset.create({
+    // Clone atômico: character + presets + relink em uma transação
+    const cloned = await prisma.$transaction(async (tx) => {
+      const newChar = await tx.character.create({
         data: {
-          name: p.name,
-          description: p.description,
-          type: p.type,
-          targetType: p.targetType,
-          diceFormula: p.diceFormula,
-          impactFormula: p.impactFormula,
-          modifier: p.modifier,
-          critThreshold: p.critThreshold,
-          critMultiplier: p.critMultiplier,
-          requiresTurn: p.requiresTurn,
-          allowOutOfCombat: p.allowOutOfCombat,
-          appliesEffect: p.appliesEffect,
-          isAreaEffect: p.isAreaEffect,
-          attribute: p.attribute,
-          durationTurns: p.durationTurns,
-          statAffected: p.statAffected,
-          effectAmount: p.effectAmount,
-          statusApplied: p.statusApplied,
-          characterId: cloned.id,
+          name: `Cópia de ${source.name}`,
+          life: source.life,
+          maxLife: source.maxLife,
+          xp: source.xp,
+          strength: source.strength,
+          agility: source.agility,
+          vigor: source.vigor,
+          intellect: source.intellect,
+          presence: source.presence,
+          baseDefense: source.baseDefense,
+          history: source.history,
+          notes: source.notes,
+          image: source.image,
+          ownerId: source.ownerId,
+          campaignId: source.campaignId,
         },
       });
-      presetIdMap[p.id] = newPreset.id;
-    }
 
-    // Re-link reaction presets to their cloned counterparts
-    await prisma.character.update({
-      where: { id: cloned.id },
-      data: {
-        dodgePresetId: source.dodgePresetId ? (presetIdMap[source.dodgePresetId] ?? null) : null,
-        blockPresetId: source.blockPresetId ? (presetIdMap[source.blockPresetId] ?? null) : null,
-        counterAttackPresetId: source.counterAttackPresetId ? (presetIdMap[source.counterAttackPresetId] ?? null) : null,
-      },
+      const presetIdMap: Record<string, string> = {};
+      await Promise.all(
+        source.presets.map(async (p) => {
+          const newPreset = await tx.actionPreset.create({
+            data: {
+              name: p.name,
+              description: p.description,
+              type: p.type,
+              targetType: p.targetType,
+              diceFormula: p.diceFormula,
+              impactFormula: p.impactFormula,
+              modifier: p.modifier,
+              critThreshold: p.critThreshold,
+              critMultiplier: p.critMultiplier,
+              requiresTurn: p.requiresTurn,
+              allowOutOfCombat: p.allowOutOfCombat,
+              appliesEffect: p.appliesEffect,
+              isAreaEffect: p.isAreaEffect,
+              attribute: p.attribute,
+              durationTurns: p.durationTurns,
+              statAffected: p.statAffected,
+              effectAmount: p.effectAmount,
+              statusApplied: p.statusApplied,
+              characterId: newChar.id,
+            },
+          });
+          presetIdMap[p.id] = newPreset.id;
+        })
+      );
+
+      await tx.character.update({
+        where: { id: newChar.id },
+        data: {
+          dodgePresetId: source.dodgePresetId ? (presetIdMap[source.dodgePresetId] ?? null) : null,
+          blockPresetId: source.blockPresetId ? (presetIdMap[source.blockPresetId] ?? null) : null,
+          counterAttackPresetId: source.counterAttackPresetId ? (presetIdMap[source.counterAttackPresetId] ?? null) : null,
+        },
+      });
+
+      return newChar;
     });
 
     res.status(201).json({ id: cloned.id, name: cloned.name });
@@ -203,22 +205,86 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       });
     }
 
-    // Limpar relações antes de deletar
-    await prisma.character.update({
-      where: { id },
-      data: {
-        dodgePresetId: null,
-        blockPresetId: null,
-        counterAttackPresetId: null,
-      },
+    // Cascata completa em transação. Ordem importa por causa das FKs:
+    // 1. Limpar FKs auto-referenciadas (dodge/block/counter) deste e de outros characters
+    // 2. RollResultDetail (FK required → RollResult)
+    // 3. ActionLog (referencia character/target/roll/turn)
+    // 4. CharacterEffect, RollResult, CombatTurn, CombatParticipant, Inventory
+    // 5. ActionPreset (depende de tudo acima estar limpo)
+    // 6. Character
+    await prisma.$transaction(async (tx) => {
+      // 1. Limpa FKs deste character
+      await tx.character.update({
+        where: { id },
+        data: { dodgePresetId: null, blockPresetId: null, counterAttackPresetId: null },
+      });
+
+      // Outros characters podem referenciar presets DESTE character (raro mas possível).
+      const myPresets = await tx.actionPreset.findMany({
+        where: { characterId: id },
+        select: { id: true },
+      });
+      const myPresetIds = myPresets.map((p) => p.id);
+      if (myPresetIds.length > 0) {
+        await tx.character.updateMany({
+          where: { dodgePresetId: { in: myPresetIds } },
+          data: { dodgePresetId: null },
+        });
+        await tx.character.updateMany({
+          where: { blockPresetId: { in: myPresetIds } },
+          data: { blockPresetId: null },
+        });
+        await tx.character.updateMany({
+          where: { counterAttackPresetId: { in: myPresetIds } },
+          data: { counterAttackPresetId: null },
+        });
+      }
+
+      // 2. RollResultDetail (precisa vir antes do RollResult)
+      const myRolls = await tx.rollResult.findMany({
+        where: { characterId: id },
+        select: { id: true },
+      });
+      const myRollIds = myRolls.map((r) => r.id);
+      if (myRollIds.length > 0) {
+        await tx.rollResultDetail.deleteMany({
+          where: { rollResultId: { in: myRollIds } },
+        });
+      }
+      // Também details onde o character era TARGET
+      await tx.rollResultDetail.deleteMany({ where: { targetId: id } });
+
+      // 3. ActionLog (autor, alvo, ou ligado a um roll/turn deste character)
+      const myTurns = await tx.combatTurn.findMany({
+        where: { characterId: id },
+        select: { id: true },
+      });
+      const myTurnIds = myTurns.map((t) => t.id);
+      await tx.actionLog.deleteMany({
+        where: {
+          OR: [
+            { characterId: id },
+            { targetId: id },
+            ...(myRollIds.length > 0 ? [{ rollId: { in: myRollIds } }] : []),
+            ...(myTurnIds.length > 0 ? [{ turnId: { in: myTurnIds } }] : []),
+          ],
+        },
+      });
+
+      // 4. Efeitos, rolls, turnos, participants, inventário
+      await tx.characterEffect.deleteMany({ where: { characterId: id } });
+      await tx.rollResult.deleteMany({ where: { characterId: id } });
+      await tx.combatTurn.deleteMany({ where: { characterId: id } });
+      await tx.combatParticipant.deleteMany({ where: { characterId: id } });
+      await tx.inventory.deleteMany({ where: { characterId: id } });
+
+      // 5. Presets (agora sem dependências)
+      await tx.actionPreset.deleteMany({ where: { characterId: id } });
+
+      // 6. Character
+      await tx.character.delete({ where: { id } });
     });
 
-    // Deletar personagem (cascata remove inventário, presets, logs)
-    await prisma.actionPreset.deleteMany({ where: { characterId: id } });
-    await prisma.combatParticipant.deleteMany({ where: { characterId: id } });
-    await prisma.combatTurn.deleteMany({ where: { characterId: id } });
-    await prisma.rollResult.deleteMany({ where: { characterId: id } });
-    await prisma.character.delete({ where: { id } });
     res.status(204).end();
     return;
   }
